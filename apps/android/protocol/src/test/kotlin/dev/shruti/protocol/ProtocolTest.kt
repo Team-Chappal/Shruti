@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Assertions.assertThrows
 
 class ProtocolTest {
     private fun pcm(samples: Int): ByteArray =
-        (0 until samples).map { it.toByte() }.toByteArray()
+        // `samples` int16 samples = samples * 2 little-endian bytes.
+        // We just need non-zero bytes; the exact waveform is irrelevant.
+        (0 until samples * 2).map { (it and 0xFF).toByte() }.toByteArray()
 
     @Test
     fun `header roundtrips through pack and parse`() {
