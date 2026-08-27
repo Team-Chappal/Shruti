@@ -1,0 +1,21 @@
+﻿# Global agent skill library - not part of this project
+.agents/
+
+# OS junk
+Thumbs.db
+Desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Node/build artifacts
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+
+# Env files
+.env
+.env.*
