@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shruti-array"
+version = "0.1.0"
+description = "SHRUTI laptop array processor: sync, TDOA, beamforming, ASR, regression harness"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "sounddevice>=0.4.6",
+  "websockets>=12.0",
+  "PyYAML>=6.0",
+  "click>=8.1",
+  "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "pytest-cov>=4.1",
+  "mypy>=1.7",
+  "ruff>=0.1",
+  "types-PyYAML",
+]
+asr = [
+  # Real ASR engines the team can plug in on-device.
+  # The default ship is a mock; see shruti_array/asr/.
+]
+ui = [
+  "matplotlib>=3.7",
+  "pyqtgraph>=0.13",
+]
+
+[project.scripts]
+shruti-array = "shruti_array.cli:main"
+shruti-audit = "shruti_array.tools.audit:main"
+shruti-corpus = "shruti_array.tools.corpus:main"
+shruti-harness = "shruti_array.harness.regression:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["shruti_array*"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+markers = [
+  "slow: marks tests as slow (deselect with -m 'not slow')",
+  "needs_audio_device: requires an audio device to run",
+  "integration: integration tests that spin up sockets/services",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true

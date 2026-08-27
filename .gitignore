@@ -4,18 +4,57 @@
 # OS junk
 Thumbs.db
 Desktop.ini
+.DS_Store
 
 # Editor
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # Node/build artifacts
 node_modules/
 dist/
 build/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+.coverage
+htmlcov/
 
-# Env files
+# Android / Gradle
+.gradle/
+local.properties
+*.iml
+captures/
+.cxx/
+*.apk
+*.aab
+*.aar
+*.dex
+gen/
+out/
+release/
+
+# Kotlin
+.kotlin/
+
+# Env
 .env
 .env.*
+
+# Project artifacts
+data/captures/
+data/audit/
+data/corpus/
+data/regression_runs/
+logs/
+*.log
