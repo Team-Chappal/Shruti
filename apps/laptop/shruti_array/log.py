@@ -15,7 +15,6 @@ import sys
 import time
 from typing import Any
 
-
 _HUMAN_FORMAT = "%(asctime)s %(levelname)-7s [%(name)s] %(message)s"
 _DATE_FORMAT = "%Y-%m-%dT%H:%M:%S"
 

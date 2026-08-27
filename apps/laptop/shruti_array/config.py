@@ -96,5 +96,5 @@ class AppConfig:
     data_dir: Path = Path("data")
 
     @classmethod
-    def default(cls) -> "AppConfig":
+    def default(cls) -> AppConfig:
         return cls()

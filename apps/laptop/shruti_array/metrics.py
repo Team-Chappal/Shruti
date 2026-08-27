@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import threading
 from collections import defaultdict
-from typing import Iterable
 
 
 class Metrics:
@@ -47,7 +46,7 @@ class Metrics:
             lines.append(f"{name} {value:.3f}")
         return "\n".join(lines) + "\n"
 
-    def merge(self, other: "Metrics") -> None:
+    def merge(self, other: Metrics) -> None:
         with self._lock:
             for key, value in other._counters.items():
                 self._counters[key] += value

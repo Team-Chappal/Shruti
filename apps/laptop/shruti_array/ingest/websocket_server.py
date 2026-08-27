@@ -20,22 +20,25 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Awaitable, Callable
 
 import numpy as np
 from numpy.typing import NDArray
 
+from ..config import ServerConfig
 from ..log import get_logger
 from ..metrics import (
     ACTIVE_PHONES,
     BYTES_RECEIVED,
     CRC_FAILURES,
     DROPPED_FRAMES,
-    GLOBAL as METRICS,
     PACKETS_DECODED,
     PACKETS_RECEIVED,
     PACKETS_REJECTED,
+)
+from ..metrics import (
+    GLOBAL as METRICS,
 )
 from ..protocol import (
     CRC_SIZE,
@@ -44,7 +47,6 @@ from ..protocol import (
     PacketType,
     verify_packet,
 )
-from ..config import ServerConfig
 
 log = get_logger(__name__)
 
@@ -68,7 +70,7 @@ ConnectionHandler = Callable[["PhoneConnection"], Awaitable[None]]
 class PhoneConnection:
     phone_id: int
     sample_rate_hz: int
-    queue: "asyncio.Queue[bytes]"  # raw, CRC-verified packets
+    queue: asyncio.Queue[bytes]  # raw, CRC-verified packets
     remote: tuple[str, int]
     connected_at_s: float
     packet_times: deque[float] = field(default_factory=deque)

@@ -38,8 +38,8 @@ def main(argv: list[str] | None = None) -> int:
 
     args = p.parse_args(argv)
     if args.cmd == "run-radar":
-        from .ingest.websocket_server import PacketServer
         from .config import ServerConfig
+        from .ingest.websocket_server import PacketServer
         cfg = ServerConfig(
             host=args.host or ServerConfig().host,
             port=args.port or ServerConfig().port,

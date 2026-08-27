@@ -9,13 +9,10 @@ import pytest
 from shruti_array.protocol import (
     CRC_SIZE,
     HEADER_SIZE,
-    MAGIC,
-    VERSION,
     Flag,
     PacketType,
     ProtocolError,
     frame_packet,
-    parse_header,
     payload,
     verify_packet,
 )

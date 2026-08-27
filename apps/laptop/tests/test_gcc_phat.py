@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import numpy as np
 
-from shruti_array.config import ArrayGeometry, BeamConfig
 from shruti_array.tdoa.gcc_phat import gcc_phat, gcc_phat_batch
 
 

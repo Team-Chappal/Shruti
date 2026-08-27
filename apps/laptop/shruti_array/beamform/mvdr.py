@@ -15,8 +15,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from .steering import delays_for_direction
 from ..config import ArrayGeometry, BeamConfig
+from .steering import delays_for_direction
 
 
 def steering_vector(
@@ -30,8 +30,8 @@ def steering_vector(
 
     Returns shape (n_freqs, n_elements).
     """
-    n_elements = len(geometry.elements)
-    n_freqs = n_fft // 2 + 1
+    len(geometry.elements)
+    n_fft // 2 + 1
     freqs = np.fft.rfftfreq(n_fft, d=1.0 / sample_rate_hz)
     delays = delays_for_direction(azimuth_rad, geometry, config, sample_rate_hz)
     # delays[n] is positive; the steering vector entry undoes the propagation
@@ -135,7 +135,7 @@ def mvdr_beamform(
     smaller `n_fft` (e.g. 2048) and call this on overlapping windows with
     overlap-add synthesis downstream.
     """
-    n_elements = len(channels)
+    len(channels)
     n = min(c.size for c in channels)
     if n_fft is None:
         n_fft = 1

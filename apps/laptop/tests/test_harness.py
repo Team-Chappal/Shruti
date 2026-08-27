@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from shruti_array.harness.regression import run_synthetic_suite, si_sdr
+from shruti_array.harness.regression import run_synthetic_suite
 from shruti_array.harness.synthetic import speech_band_noise, two_speaker_scene
 from shruti_array.tools.corpus import synth_suite
 

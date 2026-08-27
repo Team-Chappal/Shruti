@@ -19,10 +19,9 @@ from pathlib import Path
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import AppConfig, ArrayGeometry
 from ..beamform import das, mvdr
-from .synthetic import two_speaker_scene, speech_band_noise, far_field_signal
-from ..tdoa.gcc_phat import gcc_phat
+from ..config import AppConfig, ArrayGeometry
+from .synthetic import far_field_signal, speech_band_noise
 
 
 def si_sdr(reference: NDArray, estimate: NDArray, eps: float = 1e-8) -> float:
@@ -78,7 +77,7 @@ def run_synthetic_suite(
     """
     geometry = geometry or AppConfig.default().geometry
     report = RegressionReport()
-    rng = np.random.default_rng(seed_base)
+    np.random.default_rng(seed_base)
     for i in range(n_scenes):
         az_deg = -60.0 + 120.0 * (i / max(1, n_scenes - 1))
         az = float(np.deg2rad(az_deg))
@@ -90,12 +89,12 @@ def run_synthetic_suite(
         ]
         interferer_az = float(np.deg2rad(-az_deg + 90.0))
         channels: list[NDArray[np.float32]] | None = None
-        for src, src_az in zip(sources, (az, interferer_az)):
+        for src, src_az in zip(sources, (az, interferer_az), strict=False):
             chs = far_field_signal(src, geometry, src_az, sample_rate_hz, snr_db=20.0, rng=scene_rng)
             if channels is None:
                 channels = chs
             else:
-                for c, new in zip(channels, chs):
+                for c, new in zip(channels, chs, strict=False):
                     c += new
         assert channels is not None
         target = sources[0]

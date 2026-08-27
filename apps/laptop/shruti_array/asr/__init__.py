@@ -10,9 +10,7 @@ QNN-exported IndicWhisper/IndicConformer on the device.
 from __future__ import annotations
 
 import abc
-import time
 from dataclasses import dataclass
-from typing import Iterable
 
 
 @dataclass(frozen=True)

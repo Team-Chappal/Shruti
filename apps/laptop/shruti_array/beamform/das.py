@@ -12,8 +12,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from .steering import delays_for_direction
 from ..config import ArrayGeometry, BeamConfig
+from .steering import delays_for_direction
 
 
 def delay_and_sum(
@@ -45,7 +45,7 @@ def delay_and_sum(
         n_fft <<= 1
     freqs = np.fft.rfftfreq(n_fft, d=1.0 / sample_rate_hz)
     accum = np.zeros(n_fft // 2 + 1, dtype=np.complex128)
-    for ch, delay in zip(channels, delays):
+    for ch, delay in zip(channels, delays, strict=False):
         spec = np.fft.rfft(ch, n=n_fft)
         # Negative delay in samples -> positive phase shift in frequency.
         accum += spec * np.exp(1j * 2 * np.pi * freqs * delay)

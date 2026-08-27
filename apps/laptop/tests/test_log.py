@@ -1,7 +1,6 @@
 """Tests for the structured logging setup."""
 from __future__ import annotations
 
-import io
 import json
 import logging
 

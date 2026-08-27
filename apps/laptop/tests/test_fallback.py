@@ -5,7 +5,6 @@ import wave
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from shruti_array.fallback import (
     RUNG_BATCH_FILE,

@@ -17,8 +17,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import ArrayGeometry, BeamConfig
 from ..beamform.steering import delays_for_direction
+from ..config import ArrayGeometry, BeamConfig
 
 
 def speech_band_noise(
@@ -61,7 +61,7 @@ def far_field_signal(
     """
     rng = rng or np.random.default_rng()
     n_samples = source.size
-    n_elements = len(geometry.elements)
+    len(geometry.elements)
     delays = delays_for_direction(azimuth_rad, geometry, config, sample_rate_hz)
     channels: list[NDArray[np.float32]] = []
     for delay in delays:
@@ -99,14 +99,14 @@ def two_speaker_scene(
     rng = np.random.default_rng(seed)
     sources = [speech_band_noise(n_samples, sample_rate_hz, rng=rng) for _ in azimuths_rad]
     channels: list[NDArray[np.float32]] | None = None
-    for source, az in zip(sources, azimuths_rad):
+    for source, az in zip(sources, azimuths_rad, strict=False):
         chs = far_field_signal(
             source, geometry, az, sample_rate_hz, snr_db=snr_db, rng=rng
         )
         if channels is None:
             channels = chs
         else:
-            for c, new in zip(channels, chs):
+            for c, new in zip(channels, chs, strict=False):
                 c += new
     assert channels is not None
     return channels, sources

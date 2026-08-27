@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from shruti_array.beamform import das, mvdr
-from shruti_array.beamform.steering import delays_for_direction, azimuth_from_tdoa
+from shruti_array.beamform.steering import azimuth_from_tdoa, delays_for_direction
 from shruti_array.config import AppConfig
 from shruti_array.harness.regression import si_sdr
 from shruti_array.harness.synthetic import two_speaker_scene
@@ -26,7 +26,8 @@ def test_steering_delays_average_to_zero_at_centroid() -> None:
 def test_azimuth_from_tdoa_roundtrip() -> None:
     geom = AppConfig.default().geometry
     # 2-element baseline along x. The pair (0, 1) sits at x=-0.3 and x=+0.3.
-    p0 = np.asarray(geom.element(0)); p1 = np.asarray(geom.element(1))
+    p0 = np.asarray(geom.element(0))
+    p1 = np.asarray(geom.element(1))
     baseline = float(np.linalg.norm(p0 - p1))
     for true_az_deg in (0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0):
         true_az = np.deg2rad(true_az_deg)

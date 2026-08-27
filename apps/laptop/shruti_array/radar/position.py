@@ -15,8 +15,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from ..config import ArrayGeometry, BeamConfig
 from ..beamform.steering import azimuth_from_tdoa
+from ..config import ArrayGeometry, BeamConfig
 
 
 def pair_tdoas_to_azimuth(

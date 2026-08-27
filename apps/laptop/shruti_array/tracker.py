@@ -21,7 +21,6 @@ from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
-from numpy.typing import NDArray
 
 
 @dataclass
@@ -107,6 +106,6 @@ def stream_to_speakers(
     if times_s is None:
         times_s = list(range(len(positions)))
     tracker = MultiSpeakerTracker(**tracker_kwargs)
-    for pos, t in zip(positions, times_s):
+    for pos, t in zip(positions, times_s, strict=False):
         tracker.update(pos, t)
     return tracker.tracks
