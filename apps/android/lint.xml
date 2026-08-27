@@ -1,0 +1,16 @@
+// Android lint configuration. We accept the default severity for
+// most checks but turn a few off because they fire on patterns we
+// use intentionally (e.g., the foreground services are started
+// from notifications) and the team has agreed to keep the warnings
+// visible in CI rather than silencing them.
+lint {
+    abortOnError = true
+    warningsAsErrors = false
+    checkReleaseBuilds = true
+    baseline = file("lint-baseline.xml") // committed; updated with
+                                          // `./gradlew updateLintBaseline`
+    disable += "MissingTranslation"      // we ship English-only
+    disable += "ExtraTranslation"        // same
+    disable += "VectorPath"              // we use vector paths in
+                                          // multiple resource files
+}

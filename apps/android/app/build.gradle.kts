@@ -19,6 +19,14 @@ android {
         release {
             isMinifyEnabled = false
         }
+        debug {
+            isDebuggable = true
+        }
+    }
+    lint {
+        // Inherit the repo-wide config in lint.xml; don't duplicate.
+        checkReleaseBuilds = true
+        abortOnError = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

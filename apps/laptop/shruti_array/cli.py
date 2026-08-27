@@ -24,6 +24,15 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--host", type=str, default=None)
     r.add_argument("--port", type=int, default=None)
 
+    t = sub.add_parser(
+        "text-radar",
+        help="Print a text-based radar to stdout. Useful for headless "
+        "verification and over SSH; does not need the WebSocket server.",
+    )
+    t.add_argument("--hz", type=float, default=2.0, help="Refresh rate")
+    t.add_argument("--seconds", type=float, default=0.0,
+                   help="Exit after this many seconds; 0 means run until interrupted.")
+
     sub.add_parser("synth-corpus", help="Generate a deterministic synthetic corpus.")
 
     h = sub.add_parser("harness", help="Run the regression harness.")
@@ -46,6 +55,41 @@ def main(argv: list[str] | None = None) -> int:
         )
         import asyncio
         asyncio.run(PacketServer(cfg).start())
+    elif args.cmd == "text-radar":
+        import time as _t
+
+        from .render.console_radar import make_state_from_observation, render_to_terminal
+        from .render.overlays import TranscriptLine
+        started = _t.time()
+        deadline = started + args.seconds if args.seconds > 0 else None
+        i = 0
+        try:
+            while deadline is None or _t.time() < deadline:
+                # Animate a synthetic speaker position so the operator
+                # sees the dot move. The real radar pulls from the DSP
+                # loop; this command is for headless smoke verification.
+                theta = 0.05 * i
+                pos = (1.0 * _t.cos(theta), 1.0 * _t.sin(theta))
+                state = make_state_from_observation(
+                    position_xy=pos,
+                    sync_stability_us=42.0 + (i % 5),
+                    started_at_s=started,
+                    beamform_active=True,
+                    transcript_lines=[
+                        TranscriptLine(
+                            track_id=0,
+                            text=f"text-radar tick {i}",
+                            language="en",
+                            confidence=1.0,
+                        ),
+                    ],
+                )
+                render_to_terminal(state)
+                _t.sleep(1.0 / max(args.hz, 0.1))
+                i += 1
+        except KeyboardInterrupt:
+            pass
+        return 0
     elif args.cmd == "synth-corpus":
         from .tools.corpus import main as corpus_main
         return corpus_main(["--out", "data/corpus/synth"])

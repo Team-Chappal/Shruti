@@ -56,5 +56,8 @@ data/captures/
 data/audit/
 data/corpus/
 data/regression_runs/
+data/benchmarks/
+data/models/
 logs/
 *.log
+htmlcov/
