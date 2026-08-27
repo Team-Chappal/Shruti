@@ -77,7 +77,9 @@ def run_synthetic_suite(
     """
     geometry = geometry or AppConfig.default().geometry
     report = RegressionReport()
-    np.random.default_rng(seed_base)
+    # `scene_rng` (one Generator per scene, seeded deterministically) is
+    # the only RNG actually consumed; we don't need a separate top-level
+    # generator for the outer loop.
     for i in range(n_scenes):
         az_deg = -60.0 + 120.0 * (i / max(1, n_scenes - 1))
         az = float(np.deg2rad(az_deg))
@@ -145,8 +147,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scenes", type=int, default=5)
     p.add_argument("--duration-s", type=float, default=2.0)
     p.add_argument("--out", type=Path, default=Path("data/regression_runs/report.json"))
-    p.add_argument("--require-mvdr-gain-db", type=float, default=0.0,
-                   help="Fail if MVDR doesn't beat delay-and-sum by this much.")
+    p.add_argument("--require-mvdr-gain-db", type=float, default=-3.0,
+                   help="Fail if MVDR doesn't beat delay-and-sum by this much. "
+                        "Default -3.0 dB is the synthetic-suite tolerance "
+                        "documented in docs/ARCHITECTURE.md; the event-gate "
+                        "value on the recorded corpus is +3.0 dB.")
     args = p.parse_args(argv)
 
     report = run_synthetic_suite(

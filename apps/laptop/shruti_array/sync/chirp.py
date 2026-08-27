@@ -69,8 +69,9 @@ def resample_to(signal: np.ndarray, src_hz: int, dst_hz: int) -> np.ndarray:
     while n_fft < n_src + n_dst:
         n_fft <<= 1
     spec = np.fft.rfft(signal, n=n_fft)
-    # Rescale frequency bins to the new sample rate.
-    np.fft.rfftfreq(n_fft, d=1.0 / src_hz)
+    # Rescale frequency bins to the new sample rate. We use src_hz only
+    # implicitly via the bin mapping `j = f * n_fft / src_hz` below, so
+    # the source frequency array is not built explicitly.
     dst_freqs = np.fft.rfftfreq(n_fft, d=1.0 / dst_hz)
     new_spec = np.zeros_like(spec)
     for i, f in enumerate(dst_freqs):
