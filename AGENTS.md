@@ -1,13 +1,15 @@
-# Agent skills
+# SHRUTI
+
+## Agent skills
 
 ### Issue tracker
 
-Local markdown. Issues live as files in `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues, managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default five canonical roles. See `docs/agents/triage-labels.md`.
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context. `CONTEXT.md` at the root, ADRs in `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: one root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
