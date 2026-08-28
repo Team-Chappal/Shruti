@@ -29,6 +29,13 @@ jobs:
         working-directory: apps/laptop
         run: |
           python -m pip install --upgrade pip
+          # numpy<2: numpy 2.x's type stubs use the Python 3.12
+          # 'type' statement which mypy 2.3.1 (the latest
+          # available on PyPI) can't parse. Pinning numpy<2
+          # keeps the stubs parseable on all three Python
+          # versions in the CI matrix. The runtime is fine
+          # with either.
+          python -m pip install 'numpy<2'
           python -m pip install -e '.[dev]'
           python -m pip install pytest-cov
       - name: Lint (ruff)
