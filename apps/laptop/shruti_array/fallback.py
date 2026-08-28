@@ -78,15 +78,30 @@ def list_batch_files(directory: Path, phone_id: int | None = None) -> list[Path]
 
 
 def pick_most_recent_per_phone(directory: Path) -> dict[int, Path]:
-    """Pick the single most recent WAV per phone_id from the batch dir."""
+    """Pick the single most recent WAV per phone_id from the batch dir.
+
+    Supports two filename conventions:
+      - '<phone_id>_<...>.wav'  (e.g. '0_chamber.wav')
+      - 'ch<phone_id>.wav'     (e.g. 'ch0.wav', the synth-corpus convention)
+    """
     result: dict[int, Path] = {}
     for path in list_batch_files(directory):
-        try:
-            pid = int(path.stem.split("_", 1)[0])
-        except ValueError:
+        stem = path.stem
+        phone_id: int | None = None
+        if "_" in stem:
+            try:
+                phone_id = int(stem.split("_", 1)[0])
+            except ValueError:
+                phone_id = None
+        if phone_id is None and stem.startswith("ch"):
+            try:
+                phone_id = int(stem[2:])
+            except ValueError:
+                phone_id = None
+        if phone_id is None:
             continue
-        if pid not in result:
-            result[pid] = path
+        if phone_id not in result:
+            result[phone_id] = path
     return result
 
 
@@ -104,3 +119,143 @@ def file_drop_check(directory: Path) -> Iterable[Path]:
             if path not in seen:
                 seen.add(path)
                 yield path
+
+
+def batch_ingest(
+    directory: Path,
+    out_path: Path,
+    beamform: str = "das",
+) -> Path:
+    """Pull the most recent WAV per phone from `directory`, beamform
+    them with delay-and-sum steered at the median GCC-PHAT TDOA, and
+    write the result to `out_path`. Returns `out_path`.
+
+    `beamform` selects the algorithm: 'das' (delay-and-sum, the
+    default; cheapest, what the demo uses) or 'mvdr' (better isolation
+    on recorded real-room audio but needs more snapshots).
+    """
+    from .beamform import das, mvdr
+    from .config import AppConfig
+    from .tdoa.gcc_phat import gcc_phat
+
+    picks = pick_most_recent_per_phone(directory)
+    if len(picks) < 2:
+        raise RuntimeError(
+            f"need at least 2 phones in {directory} for batch beamforming, "
+            f"found {len(picks)}"
+        )
+    # Load all channels, aligning to the shortest so the matrix is square.
+    channels: list[NDArray[np.float32]] = []
+    sample_rate_hz: int | None = None
+    for phone_id in sorted(picks):
+        sr, samples = read_wav(picks[phone_id])
+        if sample_rate_hz is None:
+            sample_rate_hz = sr
+        elif sr != sample_rate_hz:
+            raise RuntimeError(
+                f"sample rate mismatch: phone {phone_id} is {sr} Hz, "
+                f"expected {sample_rate_hz} Hz"
+            )
+        channels.append(samples)
+    n = min(c.size for c in channels)
+    channels = [c[:n] for c in channels]
+    assert sample_rate_hz is not None
+
+    # Build an array geometry that matches the actual channel count.
+    # The default geometry has 3 elements (the iQOO 3-phone tier-1
+    # pitch mode); if we only have 2 captures (tier-0 mode), we use
+    # the first two of the default. This keeps the math consistent
+    # with the live DSP and means a Tier-0 run uses the same baseline
+    # the on-device calibration expects.
+    default_geom = AppConfig.default().geometry
+    if len(channels) == len(default_geom.elements):
+        geom = default_geom
+    else:
+        # Subset the geometry to the first len(channels) elements so
+        # the beamformer's "geometry has N elements, got M channels"
+        # guard doesn't trip.
+        from .config import ArrayGeometry
+        geom = ArrayGeometry(elements=default_geom.elements[: len(channels)])
+
+    # Estimate the source direction from the GCC-PHAT TDOA between
+    # the first two channels. With 2 phones this is the only direction
+    # we can find; with 3+ we use the first pair as a starting point
+    # and rely on the beamformer to focus.
+    tau = float(gcc_phat(channels[0], channels[1]))
+    # GCC-PHAT's tau is in samples; convert to azimuth by treating the
+    # two phones as a baseline in the array geometry.
+    baseline = float(
+        np.linalg.norm(np.asarray(geom.element(0)) - np.asarray(geom.element(1)))
+    )
+    c = 343.0  # m/s, speed of sound at 20 C
+    # tau / sr is the time delay; the far-field direction cosine is
+    # (tau / sr) * c / baseline, clamped to [-1, 1] for arccos.
+    cos_arg = float(np.clip(tau * c / (baseline * sample_rate_hz), -1.0, 1.0))
+    azimuth_rad = float(np.arccos(cos_arg))
+    log.info("batch beamform: %d channels, target azimuth = %.1f deg",
+             len(channels), np.rad2deg(azimuth_rad))
+
+    if beamform == "mvdr":
+        out = mvdr.mvdr_beamform(channels, azimuth_rad, geom, sample_rate_hz)
+    else:
+        out = das.delay_and_sum(channels, azimuth_rad, geom, sample_rate_hz)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    import wave
+    with wave.open(str(out_path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(sample_rate_hz)
+        pcm = (np.clip(out, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
+        w.writeframes(pcm)
+    log.info("wrote beamformed output to %s (%d samples)", out_path, n)
+    return out_path
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point so `python -m shruti_array.fallback` works.
+
+    Three subcommands:
+      - `ingest`    run a single batch beamform over a directory
+      - `next`      print the next rung down the ladder
+      - `ls`        list the most recent WAV per phone in a directory
+    """
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description="SHRUTI fallback ladder. Used when the live "
+        "WebSocket stream is down; see docs/OPERATIONS.md and the "
+        "fallback section of tools/rebuild/recipe.md.",
+    )
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    ingest = sub.add_parser("ingest", help="Batch beamform a directory of WAVs.")
+    ingest.add_argument("--corpus", type=Path, required=True,
+                        help="Directory containing <phone_id>_<...>.wav files.")
+    ingest.add_argument("--out", type=Path, required=True,
+                        help="Output WAV path (16-bit PCM, mono).")
+    ingest.add_argument("--beamform", choices=["das", "mvdr"], default="das",
+                        help="Beamformer to use (default das).")
+
+    sub.add_parser("next", help="Print the next ladder rung down from the top.")
+
+    ls = sub.add_parser("ls", help="List the most recent WAV per phone in a directory.")
+    ls.add_argument("corpus", type=Path,
+                    help="Directory containing <phone_id>_<...>.wav files.")
+
+    args = p.parse_args(argv)
+    if args.cmd == "ingest":
+        batch_ingest(args.corpus, args.out, beamform=args.beamform)
+        return 0
+    if args.cmd == "next":
+        print(next_rung(RUNG_LIVE_STREAM).name)
+        return 0
+    if args.cmd == "ls":
+        picks = pick_most_recent_per_phone(args.corpus)
+        for phone_id in sorted(picks):
+            print(f"{phone_id}\t{picks[phone_id]}")
+        return 0
+    return 1  # pragma: no cover
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

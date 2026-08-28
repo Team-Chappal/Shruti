@@ -113,10 +113,17 @@ To run the batch mode against a directory:
 python -m shruti_array.fallback ingest \
     --corpus data/corpus/recorded/<scene>/ \
     --out /tmp/beamformed.wav
+# or, for the recorded-corpus event gate:
+python -m shruti_array.fallback ingest \
+    --corpus data/corpus/recorded/<scene>/ \
+    --out /tmp/beamformed.wav \
+    --beamform mvdr
 ```
 
-(Full command TBD; the architecture is in place, the CLI wiring
-is a 30-line addition when needed.)
+The CLI accepts two filename conventions: `<phone_id>_<...>.wav`
+(recorded corpus) and `ch<phone_id>.wav` (synthetic corpus). See
+`python -m shruti_array.fallback --help` for the `ingest`, `ls`,
+and `next` subcommands.
 
 ## Logs
 

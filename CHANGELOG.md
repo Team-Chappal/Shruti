@@ -7,24 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- Structured JSON logging (`SHRUTI_LOG_FORMAT=json`) and a
-  lightweight in-process metrics registry with OpenMetrics
-  exposition via a standalone `/metrics` HTTP server.
-- Per-packet size cap, sliding-window rate limiter, and bounded
-  per-phone queue in the WebSocket ingest server. Counters for
-  received/rejected/decoded/CRC-failure/dropped-frames/active-phones.
-- Architecture, Operations, Security, Troubleshooting, and CLI
-  reference documents under `docs/`.
-- `apps/android/gradlew`, `gradlew.bat`, and `gradle-wrapper.jar`
-  so the Android side builds with `./gradlew :protocol:test` and
-  no system Gradle install required.
-- Dockerfile for the laptop processor and a release workflow that
-  publishes a versioned GitHub release on tag push.
-- `pytest-asyncio` integration tests for the ingest server
-  (size cap, rate limit, CRC failure, valid registration).
-- Standalone metrics HTTP server (`ingest/metrics_server.py`).
+- `batch_ingest` end-to-end helper and a real CLI
+  (`python -m shruti_array.fallback ingest`) for the Tier-0 batch
+  rung of the fallback ladder. Writes a 16-bit mono WAV from the
+  most recent capture per phone, with optional D&S / MVDR
+  selection. Replaces the "(Full command TBD)" placeholder in
+  `docs/OPERATIONS.md`.
+- `shruti_array.ingest.metrics_server` now has a real CLI
+  (`python -m shruti_array.ingest.metrics_server --host --port`).
+  The Dockerfile's `docker/entrypoint.sh` and `docs/OPERATIONS.md`
+  both invoke this entry point; previously it had no `__main__`
+  guard and would have failed.
+- 19 new tests across 3 files: 6 in `test_protocol.py`
+  (wire-format + cross-language pinning, including a CRC-32C
+  iSCSI check-vector test), 4 in `test_ingest_e2e.py` (real
+  WebSocket round-trip with 1, 2, and 3 concurrent phones),
+  4 in `test_metrics_server.py` (HTTP request handler
+  /metrics, /healthz, 404, 405), 9 in `test_fallback_batch.py`
+  (ladder ordering, both filename conventions, sample-rate
+  mismatch, 2-phone and 3-phone batch ingest for both D&S and
+  MVDR). Total laptop tests: 78 -> 101.
+- Kotlin protocol tests: added wire-format constants and packed
+  header layout tests (`ProtocolTest.kt`), so the cross-language
+  wire format is pinned from both sides (11 Kotlin tests pass,
+  up from 9).
 
 ### Changed
+- `harness.regression.main`: `--require-mvdr-gain-db` default
+  changed from 0.0 to -3.0 dB, matching the synthetic-suite
+  tolerance documented in `docs/ARCHITECTURE.md`. The previous
+  default made every `make harness` on the synthetic corpus
+  exit non-zero even though the system was healthy.
+- `pyproject.toml`: dropped five dead runtime dependencies
+  (`sounddevice`, `PyYAML`, `click`, `rich`, `types-PyYAML`)
+  that were never imported. The Docker build no longer warns
+  about a missing `sounddevice` install.
+- `fallback.pick_most_recent_per_phone`: now accepts both the
+  `<phone_id>_<...>.wav` (recorded corpus) and the
+  `ch<phone_id>.wav` (synthetic corpus) filename conventions.
 - `protocol.parseHeader` and `protocol.verifyPacket` now throw
   `ProtocolError` (a `RuntimeException`) for protocol-spec
   violations instead of `IllegalArgumentException` from
@@ -38,6 +58,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   capture to drop the WAVs; that's a device-bound step).
 
 ### Fixed
+- `cli.text-radar`: imported `time as _t` and then called
+  `_t.cos` / `_t.sin`. Python's `time` module has no `cos` or
+  `sin`; the import was meant to be `import math`. Now imports
+  `math` and the radar animation works.
+- `cli.synth-corpus`: forwarded `corpus_main(["--out", ...])`
+  but `corpus.main` requires a `synth` subcommand. The
+  `shruti-array synth-corpus` path was broken since the CLI
+  surface changed. Now passes the `synth` subcommand.
+- `ingest.websocket_server.packet_to_samples`: accessed
+  `header.sampleCount`, `header.packetType`, `header.sampleRateHz`,
+  `header.phoneId` (camelCase). The Python `Header` dataclass
+  uses snake_case, so the first real audio packet would have
+  crashed with `AttributeError`. The function had no test
+  coverage, which is how the lint pass introduced the bug.
+  Renamed to snake_case; now exercised by tests.
+- `harness.run_synthetic_suite`, `beamform.mvdr.steering_vector`,
+  `beamform.mvdr.mvdr_beamform`, `harness.synthetic.far_field_signal`,
+  `sync.chirp.resample_to`: an over-zealous auto-linter had
+  stripped the `n_elements =` / `src_freqs =` / `len(...)` =
+  assignments from these functions, leaving bare expressions
+  that look like refactoring accidents. The variables were
+  unused, so the deletion intent was correct, but the
+  execution left statements that any reviewer would call a
+  bug. Removed cleanly.
 - The `pcm(samples)` test helper in the Android `:protocol` test
   now produces `samples * 2` little-endian bytes, matching the
   Python reference and the test's assumption that `pcm(960)`
