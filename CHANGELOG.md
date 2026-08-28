@@ -18,6 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   The Dockerfile's `docker/entrypoint.sh` and `docs/OPERATIONS.md`
   both invoke this entry point; previously it had no `__main__`
   guard and would have failed.
+- `shruti_array.dsp_loop.DspLoop` and `SyntheticPhoneSource`
+  modules that wire the per-phone packet queues into the
+  alignment / TDOA / beamforming / tracking pipeline. The
+  WebSocket ingest was filling queues but nothing was draining
+  them; this is the missing link. Both synchronous `step()`
+  and async `frames()` generator exposed.
+- `shruti-array demo` CLI subcommand + `make demo` target.
+  Runs the full pipeline end-to-end with synthetic phones, no
+  real hardware required. Used as the integration test for
+  the live demo's "toggle" moment.
 - 19 new tests across 3 files: 6 in `test_protocol.py`
   (wire-format + cross-language pinning, including a CRC-32C
   iSCSI check-vector test), 4 in `test_ingest_e2e.py` (real
@@ -26,11 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   /metrics, /healthz, 404, 405), 9 in `test_fallback_batch.py`
   (ladder ordering, both filename conventions, sample-rate
   mismatch, 2-phone and 3-phone batch ingest for both D&S and
-  MVDR). Total laptop tests: 78 -> 101.
+  MVDR), 8 in `test_dsp_loop.py` (ready/aligned_window
+  correctness, off-axis localisation, both D&S and MVDR,
+  tracker, counters, synthetic source). Total laptop tests:
+  78 -> 109.
 - Kotlin protocol tests: added wire-format constants and packed
   header layout tests (`ProtocolTest.kt`), so the cross-language
   wire format is pinned from both sides (11 Kotlin tests pass,
   up from 9).
+- `docs/architecture.html`: dark-themed, color-coded
+  architecture page (5 panels). Linked from the README.
+- `docs/ARCHITECTURE_DIAGRAMS.md`: ASCII version of the same
+  diagrams, for the printed submission pack.
+- `docs/BENCHMARKS.md`: captured DSP hot-path numbers with
+  latency budget breakdown. Refresh with `make bench`.
+- `docs/LEARNED.md`: what shipped vs. what the battle plan
+  assumed, and what the team should expect on event day.
 
 ### Changed
 - `harness.regression.main`: `--require-mvdr-gain-db` default
@@ -45,6 +66,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - `fallback.pick_most_recent_per_phone`: now accepts both the
   `<phone_id>_<...>.wav` (recorded corpus) and the
   `ch<phone_id>.wav` (synthetic corpus) filename conventions.
+
+### CI
+- Coverage gate: `pytest --cov=shruti_array --cov-fail-under=75`
+  in `.github/workflows/ci.yml` (was: no coverage gate). The
+  current package sits at 77% with the standard ignore, giving
+  2 points of headroom for small refactors.
+- `mypy shruti_array` is now a build-failing check. It used to
+  be `|| true` so a 14-error mypy report didn't break the
+  build. The 14 errors were fixed in Wave 2; the gate is now
+  enforced.
+- End-to-end demo smoke: `shruti-array demo --seconds 1` runs
+  in CI. If a refactor breaks the DSP loop's plumbing, this
+  fails before the merge lands.
+- Benchmark run: `python -m tools.benchmark` in CI. The
+  numbers are reviewed manually; the goal is "no contributor
+  forgets to re-baseline."
 - `protocol.parseHeader` and `protocol.verifyPacket` now throw
   `ProtocolError` (a `RuntimeException`) for protocol-spec
   violations instead of `IllegalArgumentException` from
