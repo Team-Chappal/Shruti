@@ -40,7 +40,13 @@ jobs:
         working-directory: apps/laptop
         run: |
           python -m pip install mypy
-          python -m mypy shruti_array
+          # --follow-imports=silent makes mypy ignore type
+          # stubs from third-party packages (e.g. numpy
+          # 2.x's type statement which is Python 3.12-only
+          # and breaks mypy on 3.10/3.11 runners). We only
+          # want to type-check our own code, not the
+          # vendored stubs.
+          python -m mypy --follow-imports=silent shruti_array
       - name: Security (bandit)
         working-directory: apps/laptop
         run: |
