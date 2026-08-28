@@ -64,25 +64,26 @@ def test_loop_emits_correct_window_shape() -> None:
         assert ch.dtype == np.float32
 
 
-def test_loop_localises_off_axis_speaker() -> None:
-    """A speaker off the array's broadside should localise to a
-    position with positive y when y is positive in the source
-    coordinates. The assertion is loose because the synthetic
-    test scene has finite-SNR noise and the localiser has
-    3 TDOAs but 2 unknowns (over-determined)."""
+def test_loop_step_produces_a_well_formed_frame() -> None:
+    """A well-formed `LoopFrame` comes out of `step()` when
+    the buffers are full. The test name was
+    'test_loop_localises_off_axis_speaker' but the
+    assertion was just '< 10.0 m' (a sanity check, not a
+    real localisation test). Real localisation is
+    covered by test_radar.py. The test exists to pin down
+    that `step()` doesn't crash on a real
+    synthetic-scene input and produces the expected frame
+    shape."""
     aligner = _make_aligner(3)
     geometry = AppConfig.default().geometry
     loop = DspLoop(aligner, geometry=geometry)
-    # Source at +x, +y so the localiser should put the dot
-    # in the +x, +y half-plane.
+    # Use a synthetic two-speaker scene with a known
+    # source at 30 deg. The localiser's result is not
+    # asserted exactly (test_radar.py covers that), only
+    # that step() returns a well-formed frame.
     src_azimuth = np.deg2rad(30.0)
     sr = DEFAULT_SAMPLE_RATE_HZ
     n = loop.window_n_samples()
-    # Use the synthetic two-speaker scene builder from the
-    # harness — it produces a deterministic multi-channel signal
-    # with a target at a known azimuth. The test just exercises
-    # the loop's plumbing; correctness of localisation is covered
-    # by test_radar.py.
     from shruti_array.harness.synthetic import two_speaker_scene
     channels, _sources = two_speaker_scene(
         n_samples=n, sample_rate_hz=sr, geometry=geometry,
@@ -93,14 +94,22 @@ def test_loop_localises_off_axis_speaker() -> None:
         loop.buffer_pcm(pid, ch.astype(np.float32))
     frame = loop.step()
     assert frame is not None
-    # The localiser may or may not converge with synthetic
-    # speech-band noise; if it doesn't, that's the test
-    # data's fault, not the loop's. We just assert the call
-    # didn't crash and produced a well-formed frame.
+    # The frame's per-phone channels are the right shape.
+    expected_n = loop.window_n_samples()
+    assert len(frame.channels) == 3
+    for ch in frame.channels:
+        assert ch.shape == (expected_n,)
+        assert ch.dtype == np.float32
+    # The beamformed output is the right shape and dtype.
+    assert frame.beamformed.shape == (expected_n,)
+    assert frame.beamformed.dtype == np.float32
+    # TDOAs were computed for all 3 pairs.
+    assert len(frame.tdoas) == 3  # C(3, 2) = 3 pairs
+    # The localiser's result is either None (didn't
+    # converge) or a position within the bounded search
+    # radius. Don't pin the exact position here.
     if frame.position_xy is not None:
         x, y = frame.position_xy
-        # Distance from the array centroid should be in metres
-        # (the localiser bounds the result to 10 m radius).
         assert float(np.hypot(x, y)) < 10.0, (x, y)
 
 
