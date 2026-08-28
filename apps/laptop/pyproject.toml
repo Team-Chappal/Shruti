@@ -77,3 +77,11 @@ strict_optional = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 ignore_missing_imports = true
+
+# numpy 2.x's type stubs use the Python 3.12 'type' statement,
+# which mypy 2.3.1's parser can't handle on Python 3.10/3.11.
+# Tell mypy to skip numpy's stubs entirely (we only type-check
+# our own code; numpy's signatures are checked at runtime).
+[[tool.mypy.overrides]]
+module = ["numpy", "numpy.*"]
+ignore_missing_imports = true
