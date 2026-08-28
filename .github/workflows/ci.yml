@@ -59,8 +59,12 @@ jobs:
         working-directory: apps/laptop
         run: python -m shruti_array.cli demo --seconds 1
       - name: Run the benchmark (perf budget)
+        # The `tools` package lives at the repo root, not in
+        # apps/laptop. GITHUB_WORKSPACE is the runner's
+        # checkout root; adding it to PYTHONPATH makes the
+        # `tools` package importable from this step.
         working-directory: apps/laptop
-        run: cd .. && python -m tools.benchmark
+        run: PYTHONPATH=$GITHUB_WORKSPACE python -m tools.benchmark
       - name: "Smoke: build the regression report"
         working-directory: apps/laptop
         run: |
