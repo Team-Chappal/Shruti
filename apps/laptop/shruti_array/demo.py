@@ -116,10 +116,15 @@ def main(argv: list[str] | None = None) -> int:
         "laptop with no real hardware. The audio is a "
         "synthetic tone; the radar dot moves on a circle.",
     )
-    p.add_argument("--phones", type=int, default=3, help="Number of simulated phones (default 3)")
+    p.add_argument("--phones", type=int, default=3,
+                   help="Number of simulated phones (default 3, minimum 2)")
     p.add_argument("--seconds", type=float, default=8.0, help="Duration in seconds (default 8)")
     p.add_argument("--speed", type=float, default=0.5, help="Target angular speed, rad/s (default 0.5)")
     args = p.parse_args(argv)
+    if args.phones < 2:
+        # We need at least 2 channels for GCC-PHAT to produce a
+        # non-trivial TDOA; the beamformer also requires N >= 2.
+        p.error(f"--phones must be >= 2 (got {args.phones})")
 
     try:
         asyncio.run(_run_demo(
