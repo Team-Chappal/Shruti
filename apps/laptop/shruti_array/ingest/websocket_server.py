@@ -20,8 +20,9 @@ from __future__ import annotations
 import asyncio
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -63,7 +64,7 @@ MAX_PACKET_BYTES: int = HEADER_SIZE + MAX_PAYLOAD_SAMPLES * 2 + CRC_SIZE
 _RATE_WINDOW_S: float = 2.0
 _RATE_MAX_PACKETS: int = 400
 
-ConnectionHandler = Callable[["PhoneConnection"], Awaitable[None]]
+ConnectionHandler = Callable[["PhoneConnection"], Coroutine[Any, Any, None]]
 
 
 @dataclass
@@ -203,11 +204,11 @@ def packet_to_samples(packet: bytes) -> tuple[PacketType, int, int, NDArray[np.f
     Samples are returned as float32 in [-1, 1].
     """
     header = verify_packet(packet)
-    payload = packet[HEADER_SIZE : HEADER_SIZE + header.sampleCount * 2]
+    payload = packet[HEADER_SIZE : HEADER_SIZE + header.sample_count * 2]
     raw = np.frombuffer(payload, dtype="<i2")
     return (
-        header.packetType,
-        header.sampleRateHz,
-        header.phoneId,
+        header.packet_type,
+        header.sample_rate_hz,
+        header.phone_id,
         (raw.astype(np.float32) / 32768.0),
     )

@@ -91,6 +91,8 @@ def covariance(
             R_accum = R_s
         else:
             R_accum = R_accum + R_s
+    # n_subframes >= 1 and the loop ran at least once, so R_accum is set.
+    assert R_accum is not None
     return R_accum / n_subframes
 
 

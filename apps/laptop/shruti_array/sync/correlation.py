@@ -84,8 +84,14 @@ def find_offset_sub_sample(
     else:
         delta = 0.5 * (y_m1 - y_p1) / denom
     refined_peak = peak + delta
-    lag = refined_peak if refined_peak <= n // 2 else refined_peak - n
-    return float(-lag)
+    # Wrap-around: positive lag if peak is in the first half of the
+    # circular xcorr, negative otherwise. Mypy can't infer the union
+    # of the two branches so we wrap each branch in int() explicitly.
+    if refined_peak <= n // 2:
+        signed_lag: float = -int(refined_peak)
+    else:
+        signed_lag = -int(refined_peak - n)
+    return signed_lag
 
 
 def _next_pow2(n: int) -> int:

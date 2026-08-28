@@ -48,10 +48,12 @@ class Metrics:
 
     def merge(self, other: Metrics) -> None:
         with self._lock:
-            for key, value in other._counters.items():
-                self._counters[key] += value
-            for key, value in other._gauges.items():
-                self._gauges[key] = value
+            # Mypy loses the int/float narrowing across instances when
+            # the same name is reused; use distinct names per loop.
+            for ckey, cvalue in other._counters.items():
+                self._counters[ckey] += int(cvalue)
+            for gkey, gvalue in other._gauges.items():
+                self._gauges[gkey] = float(gvalue)
 
     @staticmethod
     def _fmt_name(name: str, labels: tuple[tuple[str, str], ...]) -> str:
