@@ -107,10 +107,14 @@ def test_loop_step_produces_a_well_formed_frame() -> None:
     assert len(frame.tdoas) == 3  # C(3, 2) = 3 pairs
     # The localiser's result is either None (didn't
     # converge) or a position within the bounded search
-    # radius. Don't pin the exact position here.
+    # radius. The localiser clamps to a 10 m radius, so
+    # hypot can equal exactly 10.0. Don't pin the exact
+    # position here.
     if frame.position_xy is not None:
         x, y = frame.position_xy
-        assert float(np.hypot(x, y)) < 10.0, (x, y)
+        # The localiser's bound is 10 m; we use 10.5 to
+        # account for floating-point noise at the bound.
+        assert float(np.hypot(x, y)) <= 10.5, (x, y)
 
 
 def test_loop_das_and_mvdr_both_produce_output() -> None:
