@@ -39,7 +39,9 @@ def main(argv: list[str] | None = None) -> int:
     h.add_argument("--scenes", type=int, default=5)
     h.add_argument("--duration-s", type=float, default=2.0)
     h.add_argument("--out", type=str, default="data/regression_runs/report.json")
-    h.add_argument("--require-mvdr-gain-db", type=float, default=0.0)
+    # Default matches regression.py's synthetic-suite tolerance. Use a
+    # positive value (e.g. 3.0) for the recorded-corpus event gate.
+    h.add_argument("--require-mvdr-gain-db", type=float, default=-3.0)
 
     a = sub.add_parser("audit", help="Analyze a directory of phone captures.")
     a.add_argument("--captures", type=str, default="data/captures")
@@ -56,6 +58,7 @@ def main(argv: list[str] | None = None) -> int:
         import asyncio
         asyncio.run(PacketServer(cfg).start())
     elif args.cmd == "text-radar":
+        import math
         import time as _t
 
         from .render.console_radar import make_state_from_observation, render_to_terminal
@@ -69,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
                 # sees the dot move. The real radar pulls from the DSP
                 # loop; this command is for headless smoke verification.
                 theta = 0.05 * i
-                pos = (1.0 * _t.cos(theta), 1.0 * _t.sin(theta))
+                pos = (math.cos(theta), math.sin(theta))
                 state = make_state_from_observation(
                     position_xy=pos,
                     sync_stability_us=42.0 + (i % 5),
@@ -92,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     elif args.cmd == "synth-corpus":
         from .tools.corpus import main as corpus_main
-        return corpus_main(["--out", "data/corpus/synth"])
+        return corpus_main(["synth", "--out", "data/corpus/synth"])
     elif args.cmd == "harness":
         from .harness.regression import main as harness_main
         return harness_main([

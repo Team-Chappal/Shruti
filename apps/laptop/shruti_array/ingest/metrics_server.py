@@ -91,3 +91,26 @@ class MetricsHTTPServer:
             writer.write(_render("not found\n", status=404))
         await writer.drain()
         writer.close()
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entry point so `python -m shruti_array.ingest.metrics_server`
+    works (used by the Dockerfile's entrypoint.sh and the OPERATIONS.md
+    runbook)."""
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description="SHRUTI metrics HTTP server. Exposes /metrics "
+        "(OpenMetrics text) and /healthz on the configured port.",
+    )
+    p.add_argument("--host", default="0.0.0.0", help="Bind address (default 0.0.0.0)")
+    p.add_argument("--port", type=int, default=8766, help="Bind port (default 8766)")
+    args = p.parse_args(argv)
+
+    server = MetricsHTTPServer(host=args.host, port=args.port)
+    asyncio.run(server.start())
+    return 0  # pragma: no cover
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())

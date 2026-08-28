@@ -75,7 +75,7 @@ class SherpaOnnxASR(ASR):
         if self._recognizer is not None:
             return
         try:
-            import sherpa_onnx  # type: ignore
+            import sherpa_onnx
         except ImportError as e:
             raise RuntimeError(
                 "sherpa-onnx is not installed. Run "
@@ -96,6 +96,7 @@ class SherpaOnnxASR(ASR):
 
     def transcribe(self, samples, sample_rate_hz: int) -> list[TranscriptSegment]:
         self._ensure_recognizer()
+        assert self._recognizer is not None  # narrowed by _ensure_recognizer
         self._call_count += 1
         if sample_rate_hz != self.config.sample_rate_hz:
             # The laptop beamformer runs at 48 kHz; sherpa-onnx

@@ -61,7 +61,6 @@ def far_field_signal(
     """
     rng = rng or np.random.default_rng()
     n_samples = source.size
-    len(geometry.elements)
     delays = delays_for_direction(azimuth_rad, geometry, config, sample_rate_hz)
     channels: list[NDArray[np.float32]] = []
     for delay in delays:

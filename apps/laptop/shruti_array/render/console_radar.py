@@ -137,9 +137,11 @@ def _world_to_cell(x: float, y: float) -> tuple[int, int]:
     return col, row
 
 
-def _visualise(s: str) -> str:
+def _visualise(s: str) -> list[str]:
     """Return the string unchanged; placeholder for future ANSI
-    column-aware colouring."""
+    column-aware colouring. Returns a list because callers feed the
+    result into `"".join(...)` to compose multi-segment lines.
+    """
     return [s]
 
 

@@ -28,10 +28,9 @@ def steering_vector(
 ) -> NDArray[np.complex128]:
     """Frequency-domain steering vector for the given direction.
 
-    Returns shape (n_freqs, n_elements).
+    Returns shape (n_freqs, n_elements), where n_freqs = n_fft // 2 + 1 and
+    n_elements is the number of microphones in `geometry`.
     """
-    len(geometry.elements)
-    n_fft // 2 + 1
     freqs = np.fft.rfftfreq(n_fft, d=1.0 / sample_rate_hz)
     delays = delays_for_direction(azimuth_rad, geometry, config, sample_rate_hz)
     # delays[n] is positive; the steering vector entry undoes the propagation
@@ -92,6 +91,8 @@ def covariance(
             R_accum = R_s
         else:
             R_accum = R_accum + R_s
+    # n_subframes >= 1 and the loop ran at least once, so R_accum is set.
+    assert R_accum is not None
     return R_accum / n_subframes
 
 
@@ -135,7 +136,6 @@ def mvdr_beamform(
     smaller `n_fft` (e.g. 2048) and call this on overlapping windows with
     overlap-add synthesis downstream.
     """
-    len(channels)
     n = min(c.size for c in channels)
     if n_fft is None:
         n_fft = 1

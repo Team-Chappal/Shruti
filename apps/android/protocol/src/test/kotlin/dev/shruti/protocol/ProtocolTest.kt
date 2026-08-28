@@ -100,4 +100,45 @@ class ProtocolTest {
         val selftest = crc32c("123456789".toByteArray(Charsets.US_ASCII))
         assertEquals(0xE3069283.toInt(), selftest)
     }
+
+    @Test
+    fun `wire format constants match python reference`() {
+        // The Python reference lives in apps/laptop/shruti_array/protocol.py.
+        // If you change a constant here, change it there in the same commit.
+        assertEquals(0x53555254, Protocol.MAGIC)
+        assertEquals(1, Protocol.VERSION)
+        assertEquals(30, Protocol.HEADER_SIZE)
+        assertEquals(4, Protocol.CRC_SIZE)
+        assertEquals(16_384, Protocol.MAX_PAYLOAD_SAMPLES)
+        assertEquals(0x01, Protocol.TYPE_AUDIO_FRAME)
+        assertEquals(0x02, Protocol.TYPE_CHIRP_ECHO)
+        assertEquals(0x03, Protocol.TYPE_HEARTBEAT)
+        assertEquals(1, Protocol.FLAG_DROPPED)
+        assertEquals(2, Protocol.FLAG_LAST)
+    }
+
+    @Test
+    fun `packed header layout matches the little-endian struct`() {
+        // Sentinel non-zero values per field; if any offset drifts, the
+        // assertions below turn into red. See the Python-side equivalent
+        // in tests/test_protocol.py::test_packed_header_layout_matches_struct_format.
+        val pkt = framePacket(
+            phoneId = 0xAB,
+            sequence = 0x01020304,
+            sampleRateHz = 0x05060708,
+            samples = byteArrayOf(0x00, 0x00), // 1 int16 sample
+            timestampUs = 0x090A0B0C0D0E0F10L,
+        )
+        val dv = java.nio.ByteBuffer.wrap(pkt).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+        assertEquals(0x53555254.toInt(), dv.int)
+        assertEquals(1, dv.get().toInt() and 0xFF) // version
+        assertEquals(0x01, dv.get().toInt() and 0xFF) // packetType
+        assertEquals(0, dv.get().toInt() and 0xFF) // flags
+        assertEquals(0xAB, dv.get().toInt() and 0xFF) // phoneId
+        assertEquals(0x01020304, dv.int) // sequence
+        assertEquals(0x05060708, dv.int) // sampleRateHz
+        assertEquals(1, dv.short.toInt() and 0xFFFF) // sampleCount
+        assertEquals(0, dv.int) // reserved
+        assertEquals(0x090A0B0C0D0E0F10L, dv.long) // timestampUs
+    }
 }

@@ -86,7 +86,7 @@ def localize_2d(
             sol = _least_squares(residuals, p0 + offset)
         except Exception:
             continue
-        r = np.linalg.norm(residuals(sol))
+        r = float(np.linalg.norm(residuals(sol)))
         if best is None or r < best[0]:
             best = (r, sol)
     if best is None:
