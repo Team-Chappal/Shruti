@@ -1,0 +1,12 @@
+# Mark shell scripts as executable in the git index.
+# This is the canonical fix for the "Permission denied"
+# error on GitHub Actions runners: git stores the
+# executable bit as a flag, not as part of the file mode,
+# so this attribute tells git to set the bit on every
+# checkout. Works on Linux runners, macOS, and WSL.
+
+# Gradle wrapper (Unix).
+apps/android/gradlew         text eol=lf
+
+# Docker entrypoint.
+docker/entrypoint.sh          text eol=lf

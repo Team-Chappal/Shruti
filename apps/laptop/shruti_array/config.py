@@ -80,7 +80,12 @@ class ArrayGeometry:
 
 @dataclass(frozen=True)
 class ServerConfig:
-    host: str = "0.0.0.0"
+    # Bind to all interfaces so the phones on the Wi-Fi Direct
+    # group can reach the laptop. The trust model in
+    # docs/SECURITY.md says we rely on the closed network
+    # (Wi-Fi Direct or a venue LAN) for this; the bind
+    # address is configurable for prod-style deployments.
+    host: str = "0.0.0.0"  # nosec B104 — intentional for the demo
     port: int = 8765
     protocol: Literal["websocket", "udp"] = "websocket"
 

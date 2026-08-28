@@ -25,6 +25,12 @@ class TTS(abc.ABC):
 
 class MockTTS(TTS):
     def speak(self, text: str, language: str = "en") -> bytes:
+        # An empty or whitespace-only string returns no audio
+        # (matches PiperTTS's contract on line 55-56 of
+        # piper.py — the real engine also produces silence
+        # for empty input).
+        if not text.strip():
+            return b""
         # 100 ms of silence per character, never less than 0.5s. Plenty
         # for the demo's "did it actually speak?" check.
         duration_s = max(0.5, 0.1 * len(text))

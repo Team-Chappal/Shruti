@@ -42,7 +42,12 @@ def _render(payload: str, status: int = 200, content_type: str = "text/plain; ch
 
 
 class MetricsHTTPServer:
-    def __init__(self, host: str = "0.0.0.0", port: int = 8766, packet_server: PacketServer | None = None) -> None:
+    # The default 0.0.0.0 bind is intentional: the metrics
+    # endpoint must be reachable from the same Wi-Fi Direct
+    # group as the phones, on the same network as the
+    # dashboard scraper. See ServerConfig above for the
+    # trust-model rationale.
+    def __init__(self, host: str = "0.0.0.0", port: int = 8766, packet_server: PacketServer | None = None) -> None:  # nosec B104
         self.host = host
         self.port = port
         self.packet_server = packet_server
@@ -103,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         description="SHRUTI metrics HTTP server. Exposes /metrics "
         "(OpenMetrics text) and /healthz on the configured port.",
     )
-    p.add_argument("--host", default="0.0.0.0", help="Bind address (default 0.0.0.0)")
+    p.add_argument("--host", default="0.0.0.0", help="Bind address (default 0.0.0.0, see ServerConfig)")  # nosec B104
     p.add_argument("--port", type=int, default=8766, help="Bind port (default 8766)")
     args = p.parse_args(argv)
 

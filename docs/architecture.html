@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SHRUTI Architecture</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2028;
+    --border: #2d3748;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #4ade80;  /* iQOO green */
+    --accent2: #60a5fa;  /* sync blue */
+    --accent3: #f59e0b;  /* warning orange */
+    --accent4: #c084fc;  /* signal purple */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 24px;
+  }
+  h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin: 0 0 32px;
+    font-size: 14px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+  }
+  .panel h2 {
+    margin: 0 0 16px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .diagram {
+    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--text);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .diagram .phone  { color: var(--accent); }
+  .diagram .laptop { color: var(--accent2); }
+  .diagram .signal { color: var(--accent4); }
+  .diagram .muted  { color: var(--muted); }
+  .diagram .accent { color: var(--accent3); }
+
+  .stages {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .stage {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    position: relative;
+  }
+  .stage::after {
+    content: "→";
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    font-size: 18px;
+  }
+  .stage:last-child::after { content: ""; }
+  .stage .num {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .stage .name {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+  .stage .desc {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  details {
+    margin-top: 8px;
+  }
+  summary {
+    cursor: pointer;
+    color: var(--accent2);
+    font-size: 12px;
+  }
+  pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+    margin: 8px 0 0;
+    overflow-x: auto;
+  }
+</style>
+</head>
+<body>
+<h1>SHRUTI &mdash; Architecture</h1>
+<p class="subtitle">Three phones. One microphone. Zero mercy for noise.</p>
+
+<div class="layout">
+
+  <div class="panel">
+    <h2>Bird's-eye view</h2>
+<pre class="diagram"><span class="muted">   ┌──────────────────────────────────── LAPTOP (array processor) ────────────────────────────────────┐</span>
+<span class="muted">   │                                                                                                 │</span>
+<span class="muted">   │   ingest (WebSocket)   →   sync (chirp xcorr)   →   TDOA (GCC-PHAT)                               │</span>
+<span class="muted">   │       │                        │                       │                                        │</span>
+<span class="muted">   │       ▼                        ▼                       ▼                                        │</span>
+<span class="muted">   │   ring buffer             aligner (offsets)      radar (position)                              │</span>
+<span class="muted">   │       │                        │                       │                                        │</span>
+<span class="muted">   │       └───────────────►  beamform (D&amp;S / MVDR)  ◄─────────────┘                                 │</span>
+<span class="muted">   │                                │                                                                  │</span>
+<span class="muted">   │                                ▼                                                                  │</span>
+<span class="muted">   │                          ASR (interface) → transcript pane                                        │</span>
+<span class="muted">   │                                │                                                                  │</span>
+<span class="muted">   │                                ▼                                                                  │</span>
+<span class="muted">   │                          TTS readback + overlays → screen mirror                                  │</span>
+<span class="muted">   │                                                                                                 │</span>
+<span class="muted">   │   metrics (counters/gauges) → :8766 /metrics  → dashboard                                         │</span>
+<span class="muted">   │   log (JSON or human)         → stderr → shipping                                                 │</span>
+<span class="muted">   └─────────────────────────────────────────────────────────────────────────────────────────────────┘</span>
+        <span class="accent">▲</span>                                                  <span class="accent">│</span>
+        <span class="muted">│ Wi-Fi Direct (Office Kit on iQOO)</span>             <span class="muted">│</span>
+        <span class="muted">│ packets, ~2 KB / 20 ms</span>                        <span class="muted">│</span>
+   <span class="muted">┌────┴──────────────────────────────────────────┴────────┐</span>
+   <span class="phone">│  PHONE A (master)        PHONE B (element)   PHONE C  │</span>
+   <span class="phone">│  foreground capture      foreground capture  …       │</span>
+   <span class="phone">│  UNPROCESSED @ 48 kHz                             │</span>
+   <span class="phone">│  chirp beacon every 2 s (master only)              │</span>
+   <span class="phone">│  heartbeat keep-alive against Funtouch killer      │</span>
+   <span class="muted">└─────────────────────────────────────────────────────┘</span></pre>
+  </div>
+
+  <div class="panel">
+    <h2>Signal chain (one audio frame, end to end)</h2>
+    <div class="stages">
+      <div class="stage">
+        <div class="num">1. Capture</div>
+        <div class="name">UNPROCESSED @ 48 kHz</div>
+        <div class="desc">960 int16 samples / 20 ms, ring-buffered on phone</div>
+      </div>
+      <div class="stage">
+        <div class="num">2. Frame</div>
+        <div class="name">30 B header + PCM + CRC-32C</div>
+        <div class="desc">CRC polynomial 0x1EDC6F41 (Castagnoli, iSCSI test vector)</div>
+      </div>
+      <div class="stage">
+        <div class="num">3. Stream</div>
+        <div class="name">WebSocket over Wi-Fi Direct</div>
+        <div class="desc">Office Kit bridge, per-packet size cap, rate limit</div>
+      </div>
+      <div class="stage">
+        <div class="num">4. Align</div>
+        <div class="name">Chirp handshake</div>
+        <div class="desc">17.5-22 kHz PRBS sweep, sub-sample cross-correlation</div>
+      </div>
+      <div class="stage">
+        <div class="num">5. Localise</div>
+        <div class="name">TDOA → radar</div>
+        <div class="desc">GCC-PHAT per pair, non-linear least-squares 2D fix</div>
+      </div>
+      <div class="stage">
+        <div class="num">6. Beamform</div>
+        <div class="name">D&amp;S or MVDR</div>
+        <div class="desc">Phase-shift + average, or covariance + weights</div>
+      </div>
+      <div class="stage">
+        <div class="num">7. Transcribe</div>
+        <div class="name">Indic ASR (NPU)</div>
+        <div class="desc">QNN-exported model, offline, on phone A</div>
+      </div>
+      <div class="stage">
+        <div class="num">8. Render</div>
+        <div class="name">Radar + transcript</div>
+        <div class="desc">Text-based radar + live transcript, screen-mirrored</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Fallback ladder</h2>
+    <p style="margin:0 0 8px; color:var(--muted); font-size:13px;">
+      Each rung degrades gracefully; the demo never blanks. Trigger order:
+    </p>
+    <pre class="diagram">  <span class="accent">3-phone live beamform</span>   →   2-phone array   →   single-phone enhance (NS+AGC-off)
+  Wi-Fi Direct stream  →   chunked file sync (batch reprocess)  →   on-phone-only mode
+  Ultrasonic sync     →   cable-ping calibration               →   pre-timestamped exchange</pre>
+    <p style="margin:14px 0 0; color:var(--muted); font-size:12px;">
+      The <code style="color:var(--accent2)">shruti_array.fallback</code> module owns the laptop-side
+      "am I in fallback mode?" logic and the batch-file ingest path.
+      <code style="color:var(--accent2)">python -m shruti_array.fallback ingest --corpus &lt;dir&gt; --out &lt;wav&gt;</code>
+      runs the Tier-0 batch beamform (D&amp;S or MVDR).
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Key numbers (design targets, calibrated on the iQOO loaner fleet)</h2>
+    <div class="stages">
+      <div class="stage">
+        <div class="num">Sync offset</div>
+        <div class="name">&lt; 100 µs</div>
+        <div class="desc">Per-phone clock offset after chirp handshake; design target 42 µs</div>
+      </div>
+      <div class="stage">
+        <div class="num">Sample rate</div>
+        <div class="name">48 kHz, mono</div>
+        <div class="desc">All three phones; max payload 16 384 samples / packet</div>
+      </div>
+      <div class="stage">
+        <div class="num">Frame size</div>
+        <div class="name">20 ms</div>
+        <div class="desc">960 samples; beamforming window 80 ms (4 frames)</div>
+      </div>
+      <div class="stage">
+        <div class="num">Packet rate</div>
+        <div class="name">~50 pkt/s/phone</div>
+        <div class="desc">Rate limit 400 pkt/2 s/phone (4× headroom)</div>
+      </div>
+      <div class="stage">
+        <div class="num">CRC</div>
+        <div class="name">CRC-32C</div>
+        <div class="desc">Castagnoli 0x1EDC6F41, self-tested vs iSCSI vector 0xE3069283</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>What runs where</h2>
+    <pre class="diagram"><span class="laptop">LAPTOP</span>  (the array processor, the load-bearing use of Office Kit)
+  protocol · ingest (WebSocket + /metrics) · sync (chirp xcorr) · TDOA (GCC-PHAT)
+  beamform (D&amp;S, MVDR) · tracker · radar · render (text + judge-facing overlays)
+  fallback ladder · regression harness · synthetic corpus · microbenchmark
+
+<span class="phone">PHONES</span>  (one master + two elements, foreground services)
+  capture (UNPROCESSED, MediaRecorder AudioSource) · chirp beacon (master)
+  heartbeat (keep-alive against Funtouch's background killer) · transport (TCP/WSS)
+
+<span class="muted">PHONE A ALSO RUNS</span>  (because the Snapdragon NPU is the only one available)
+  ASR (QNN-exported IndicWhisper / IndicConformer) · TTS readback (Piper)</pre>
+  </div>
+
+  <div class="panel">
+    <h2>Legend</h2>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--accent)"></span>Phone side</span>
+      <span><span class="dot" style="background:var(--accent2)"></span>Laptop side</span>
+      <span><span class="dot" style="background:var(--accent4)"></span>Audio / signal data</span>
+      <span><span class="dot" style="background:var(--accent3)"></span>Critical path / live demo</span>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
