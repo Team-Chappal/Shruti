@@ -8,7 +8,14 @@ version = "0.1.0"
 description = "SHRUTI laptop array processor: sync, TDOA, beamforming, ASR, regression harness"
 requires-python = ">=3.10"
 dependencies = [
-  "numpy>=1.24",
+  # numpy<2: numpy 2.x's type stubs use the Python 3.12
+  # 'type' statement which mypy 2.3.1 (the latest available
+  # on PyPI) can't parse. Pinning numpy<2 keeps the stubs
+  # parseable on all three Python versions in the CI matrix.
+  # The runtime is fine with either major version (the
+  # package's code uses only stable numpy APIs). Upgrade
+  # mypy past 2.3.1 to drop this pin.
+  "numpy>=1.24,<2",
   "scipy>=1.10",
   "websockets>=12.0",
   # The `asr/`, `tts/`, and `render/` modules provide interfaces
