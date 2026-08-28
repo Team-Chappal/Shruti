@@ -29,7 +29,8 @@ jobs:
         working-directory: apps/laptop
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e '.[dev]'
+          python -m pip install pytest-cov
       - name: Lint (ruff)
         working-directory: apps/laptop
         run: |
@@ -37,7 +38,9 @@ jobs:
           python -m ruff check shruti_array tests
       - name: Type check (mypy)
         working-directory: apps/laptop
-        run: python -m mypy shruti_array || true
+        run: |
+          python -m pip install mypy
+          python -m mypy shruti_array
       - name: Security (bandit)
         working-directory: apps/laptop
         run: |
@@ -45,8 +48,20 @@ jobs:
           python -m bandit -r shruti_array -ll -q
       - name: Run laptop test suite
         working-directory: apps/laptop
-        run: python -m pytest -v --tb=short --maxfail=1
-      - name: Smoke: build the regression report
+        run: >-
+          python -m pytest -v --tb=short --maxfail=1
+          --cov=shruti_array
+          --cov-report=term
+          --cov-fail-under=75
+          --ignore=shruti_array/asr/sherpa_onnx.py
+          --ignore=shruti_array/tts/piper.py
+      - name: Run the end-to-end demo (smoke)
+        working-directory: apps/laptop
+        run: python -m shruti_array.cli demo --seconds 1
+      - name: Run the benchmark (perf budget)
+        working-directory: apps/laptop
+        run: cd .. && python -m tools.benchmark
+      - name: "Smoke: build the regression report"
         working-directory: apps/laptop
         run: |
           python -m shruti_array.tools.corpus synth --out /tmp/corpus
