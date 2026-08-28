@@ -88,6 +88,14 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.5"
+      - name: Make gradlew executable
+        # The executable bit isn't stored in git; when the
+        # runner checks out the repo on Linux, ./gradlew is
+        # 0644 and `./gradlew :protocol:test` fails with
+        # "Permission denied". This chmod restores the bit
+        # for every job on every runner.
+        working-directory: apps/android
+        run: chmod +x gradlew
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
