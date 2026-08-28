@@ -156,6 +156,55 @@ class DspLoop:
             for pid in self.aligner.all_phone_ids()
         )
 
+    def pop_from_queues(
+        self,
+        queues: dict[int, asyncio.Queue[bytes]],
+        max_packets_per_phone: int = 8,
+    ) -> int:
+        """Drain up to N packets from each phone's queue, decode
+        them, and feed the resulting float32 PCM into the
+        per-phone rolling buffer.
+
+        This is the bridge between the live `PacketServer`
+        (which fills per-phone `asyncio.Queue`s) and the
+        DSP loop (which consumes float32 buffers). The
+        caller drives the loop on its own schedule: call
+        `pop_from_queues`, then `step()` if `ready()` is
+        true.
+
+        Returns the total number of packets consumed across
+        all phones. Zero on an empty queue is normal and
+        not an error.
+
+        Packets that fail CRC verification are silently
+        dropped — the queue's own metrics counter already
+        tracks them.
+        """
+        from .ingest.websocket_server import packet_to_samples
+        from .protocol import ProtocolError
+        n = 0
+        for pid, q in queues.items():
+            if pid not in self.aligner.all_phone_ids():
+                # Phone we don't know about yet. Skip; the
+                # aligner will register it on the next
+                # heartbeat.
+                continue
+            for _ in range(max_packets_per_phone):
+                try:
+                    raw = q.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                try:
+                    _type, _sr, _phone_id, samples = packet_to_samples(raw)
+                except ProtocolError:
+                    continue
+                # packet_to_samples returns int16-floats in
+                # [-1, 1]. The DspLoop expects float32 in
+                # [-1, 1], which is exactly what we have.
+                self.buffer_pcm(pid, samples)
+                n += 1
+        return n
+
     def aligned_window(self) -> list[NDArray[np.float32]] | None:
         """Pop one window of aligned audio across all registered phones.
 
