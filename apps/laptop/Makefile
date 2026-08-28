@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 PY ?= python
 
-.PHONY: help install dev test test-fast lint type check audit corpus synth run-radar text-radar clean scaffold-scene dirty-check bench coverage
+.PHONY: help install dev test test-fast lint type check audit corpus synth run-radar text-radar demo clean scaffold-scene dirty-check bench coverage
 
 help:
 	@echo "SHRUTI array processor"
@@ -51,6 +51,12 @@ run-radar:
 
 text-radar:
 	$(PY) -m shruti_array.cli text-radar --hz 2 --seconds 0
+
+demo:
+	@echo "Running the end-to-end pipeline with synthetic phones."
+	@echo "The radar dot moves on a circle; the audio is a 440 Hz tone."
+	@echo "Press Ctrl-C to stop."
+	$(PY) -m shruti_array.cli demo --seconds 8
 
 bench:
 	cd .. && $(PY) -m tools.benchmark

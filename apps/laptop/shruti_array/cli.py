@@ -35,6 +35,20 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("synth-corpus", help="Generate a deterministic synthetic corpus.")
 
+    demo_p = sub.add_parser(
+        "demo",
+        help="Run the end-to-end pipeline with synthetic phones "
+        "(no real hardware). The radar dot moves on a circle; "
+        "the audio is a synthetic 440 Hz tone. Useful for "
+        "dry-runs and as the integration test for the live demo.",
+    )
+    demo_p.add_argument("--phones", type=int, default=3,
+                        help="Number of simulated phones (default 3)")
+    demo_p.add_argument("--seconds", type=float, default=8.0,
+                        help="Duration in seconds (default 8)")
+    demo_p.add_argument("--speed", type=float, default=0.5,
+                        help="Target angular speed in rad/s (default 0.5)")
+
     h = sub.add_parser("harness", help="Run the regression harness.")
     h.add_argument("--scenes", type=int, default=5)
     h.add_argument("--duration-s", type=float, default=2.0)
@@ -96,6 +110,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "synth-corpus":
         from .tools.corpus import main as corpus_main
         return corpus_main(["synth", "--out", "data/corpus/synth"])
+    elif args.cmd == "demo":
+        from .demo import main as demo_main
+        return demo_main([
+            "--phones", str(args.phones),
+            "--seconds", str(args.seconds),
+            "--speed", str(args.speed),
+        ])
     elif args.cmd == "harness":
         from .harness.regression import main as harness_main
         return harness_main([
