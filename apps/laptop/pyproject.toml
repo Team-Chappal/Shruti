@@ -10,11 +10,11 @@ requires-python = ">=3.10"
 dependencies = [
   "numpy>=1.24",
   "scipy>=1.10",
-  "sounddevice>=0.4.6",
   "websockets>=12.0",
-  "PyYAML>=6.0",
-  "click>=8.1",
-  "rich>=13.7",
+  # The `asr/`, `tts/`, and `render/` modules provide interfaces
+  # with optional backends (sherpa-onnx, Piper, matplotlib+pyqtgraph).
+  # Pull those in via the `asr`, `tts`, and `ui` extras so the
+  # core runtime stays small enough to ship in the Dockerfile.
 ]
 
 [project.optional-dependencies]
@@ -24,11 +24,18 @@ dev = [
   "pytest-asyncio>=0.23",
   "mypy>=1.7",
   "ruff>=0.1",
-  "types-PyYAML",
 ]
 asr = [
   # Real ASR engines the team can plug in on-device.
   # The default ship is a mock; see shruti_array/asr/.
+  # sherpa-onnx and its onnxruntime backend are intentionally not
+  # pinned here — they pull CUDA / QNN builds and the on-device
+  # wiring is event-day work.
+]
+tts = [
+  # Piper TTS runs on the laptop readback. The runtime is C++ and
+  # the Python wrapper is small; both ship as part of the event
+  # box, not the pip wheel.
 ]
 ui = [
   "matplotlib>=3.7",
