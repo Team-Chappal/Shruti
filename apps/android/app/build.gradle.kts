@@ -44,6 +44,24 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Pin the Compose compiler explicitly to match Kotlin
+    // 1.9.22. Without this pin, the Compose compiler is
+    // selected by the Kotlin Gradle plugin based on the
+    // Kotlin version, and that selection can drift from the
+    // compose-runtime version pinned by the BOM below. The
+    // 1.5.8 compiler is the version that ships with Kotlin
+    // 1.9.22 and matches the runtime shape of compose-runtime
+    // 1.5.4 in the BOM. Mismatch between the two is the
+    // source of the "couldn't find inline method
+    // CompositionLocal.getCurrent()" crash that has been
+    // latent since the autonomous build (CI only runs
+    // :protocol:test, never :app:assembleDebug).
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
+    }
 }
 
 dependencies {

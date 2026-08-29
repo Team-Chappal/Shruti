@@ -54,6 +54,18 @@ class CaptureService : Service() {
         resolvedPhoneId = intent?.getIntExtra(EXTRA_PHONE_ID, -1)
             ?.takeIf { it in 0..254 }
             ?: IdentityConfig.phoneId(this)
+        // T16: start the WebSocket sender thread BEFORE the capture
+        // loop produces its first packet. Without this call,
+        // TransportClient.start() is a no-op (legacy compatibility
+        // shim) and every captured packet is dropped with
+        // "send() called before start()". The send-loop was dead
+        // since the Context-required migration; nobody noticed
+        // because the only test that exercised the full path
+        // (test_three_phones_each_registered_separately) uses an
+        // in-process WebSocket client that doesn't go through
+        // TransportClient. Caught on 2026-08-29 during round-trip
+        // validation on real hardware.
+        TransportClient.start(this)
         startInForeground()
         scope.launch { captureLoop() }
         return START_STICKY

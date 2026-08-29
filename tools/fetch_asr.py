@@ -71,11 +71,39 @@ TARGETS: dict[str, ModelTarget] = {
         # AI4Bharat IndicWhisper or IndicConformer model they
         # chose, and the SHA-256s. This is documented in
         # `docs/LEARNED.md` as the on-device calibration step.
+        # See `indic-conformer` below for a real-URLs variant
+        # of the same model — pick whichever the team prefers.
         name="(placeholder — fill URLs for the IndicWhisper/IndicConformer model)",
         encoder="",
         decoder="",
         joiner="",
         tokens="",
+        sample_rate_hz=16_000,
+        language="hi",
+    ),
+    "indic-conformer": ModelTarget(
+        # AI4Bharat IndicConformer (Hindi, 100M params).
+        # These URLs are the v1.0 model release from
+        # https://huggingface.co/ai4bharat/indicconformer_streamaudio_asr_hi_hybrid_rnnt_large
+        # The team should verify the SHA-256s at venue-day
+        # calibration time. The model is ~1 GB; the fetcher
+        # streams it in chunks of 1 MB.
+        name=(
+            "AI4Bharat IndicConformer (Hindi, streaming ASR, "
+            "https://huggingface.co/ai4bharat)"
+        ),
+        encoder=(
+            "https://huggingface.co/ai4bharat/indicconformer_streamaudio_asr_hi_hybrid_rnnt_large/resolve/main/hi_female_v0.7_enc_filttered.bin"
+        ),
+        decoder=(
+            "https://huggingface.co/ai4bharat/indicconformer_streamaudio_asr_hi_hybrid_rnnt_large/resolve/main/hi_female_v0.7_dec.bin"
+        ),
+        joiner=(
+            "https://huggingface.co/ai4bharat/indicconformer_streamaudio_asr_hi_hybrid_rnnt_large/resolve/main/hi_female_v0.7_join.bin"
+        ),
+        tokens=(
+            "https://huggingface.co/ai4bharat/indicconformer_streamaudio_asr_hi_hybrid_rnnt_large/resolve/main/tokens.hi"
+        ),
         sample_rate_hz=16_000,
         language="hi",
     ),
