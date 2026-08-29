@@ -16,6 +16,7 @@ import android.util.Log
 import dev.shruti.config.IdentityConfig
 import dev.shruti.protocol.Protocol
 import dev.shruti.protocol.framePacket
+import dev.shruti.transport.InboundWebSocketServer
 import dev.shruti.transport.TransportClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,22 @@ class CaptureService : Service() {
         // TransportClient. Caught on 2026-08-29 during round-trip
         // validation on real hardware.
         TransportClient.start(this)
+        // T19: start the inbound WebSocket server so a laptop that
+        // dials us directly (e.g. through the phone's own hotspot
+        // when the upstream AP has client isolation) receives the
+        // same audio stream that the outbound WS client would
+        // have shipped. The two sinks are independent; the audio
+        // queue feeds both. Idempotent: a no-op if already started.
+        try {
+            InboundWebSocketServer.start()
+        } catch (t: Throwable) {
+            // The server is best-effort: if it fails (e.g. the
+            // java-websocket library throws on a port we can't
+            // bind, or a class-load issue), the rest of the capture
+            // path still works. We log loudly so the failure is
+            // visible in adb logcat.
+            Log.e("CaptureService", "InboundWebSocketServer.start() failed: ${t.javaClass.name}: ${t.message}", t)
+        }
         startInForeground()
         scope.launch { captureLoop() }
         return START_STICKY
@@ -174,6 +191,10 @@ class CaptureService : Service() {
 
     override fun onDestroy() {
         scope.cancel()
+        // T19: stop the inbound WS server so the port is released
+        // and any connected laptops see a clean close frame. Safe
+        // to call even if the server was never started.
+        try { InboundWebSocketServer.stop() } catch (_: Throwable) {}
         super.onDestroy()
     }
 

@@ -37,6 +37,25 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("synth-corpus", help="Generate a deterministic synthetic corpus.")
 
+    d = sub.add_parser(
+        "dial",
+        help="Dial the phones directly via WebSocket and read the audio. "
+             "T19: used when the Wi-Fi AP has client isolation and the "
+             "phones cannot reach the laptop. The laptop dials each phone's "
+             "IP on port 8765; the phone's InboundWebSocketServer pushes "
+             "the audio stream out to the laptop.",
+    )
+    d.add_argument(
+        "--phone", action="append", required=True,
+        help="Phone to dial, as 'phone_id=host' (repeatable). "
+             "Example: --phone 0=10.158.110.1 --phone 1=10.158.110.136",
+    )
+    d.add_argument("--port", type=int, default=8765,
+                   help="WebSocket port on the phone (default 8765).")
+    d.add_argument("--duration", type=float, default=10.0,
+                   help="How long to keep the connections open, seconds "
+                        "(default 10).")
+
     demo_p = sub.add_parser(
         "demo",
         help="Run the end-to-end pipeline with synthetic phones "
@@ -87,6 +106,17 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--out", type=str, default="data/audit/report.json")
 
     args = p.parse_args(argv)
+    if args.cmd == "synth-corpus":
+        from .tools.corpus import main as corpus_main
+        return corpus_main(["synth", "--out", "data/corpus/synth"])
+    if args.cmd == "dial":
+        from .ingest.phone_dialer import main as dial_main
+        # Pass through the --phone / --port / --duration flags.
+        dial_argv: list[str] = []
+        for ph in args.phone:
+            dial_argv += ["--phone", ph]
+        dial_argv += ["--port", str(args.port), "--duration", str(args.duration)]
+        raise SystemExit(dial_main(dial_argv))
     if args.cmd == "run-radar":
         from .config import ServerConfig
         from .ingest.websocket_server import PacketServer
