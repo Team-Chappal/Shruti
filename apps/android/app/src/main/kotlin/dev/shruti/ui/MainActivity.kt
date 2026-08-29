@@ -1,7 +1,12 @@
 package dev.shruti.ui
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -40,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import dev.shruti.capture.AuditService
 import dev.shruti.capture.CaptureService
 import dev.shruti.config.IdentityConfig
 import dev.shruti.sync.ChirpService
@@ -62,6 +68,19 @@ import dev.shruti.sync.ChirpService
 class MainActivity : ComponentActivity() {
     private var pendingStartPhoneId: Int? = null
     private var pendingStartIsMaster: Boolean? = null
+
+    // T08: the BroadcastReceiver listens for AuditService's
+    // "done" broadcast and updates the in-app state with the
+    // produced WAV path. Registered on resume, unregistered on
+    // pause so we don't leak the receiver.
+    private val auditDoneReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == AuditService.ACTION_AUDIT_DONE) {
+                latestAuditPath = intent.getStringExtra(AuditService.EXTRA_OUTPUT_PATH)
+            }
+        }
+    }
+    @Volatile private var latestAuditPath: String? = null
 
     private val requestRecordAudio = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -91,9 +110,43 @@ class MainActivity : ComponentActivity() {
                             requestPermissionsThenStart()
                         },
                         onStopClicked = { stopSession() },
+                        onAuditClicked = { phoneId ->
+                            requestRecordAudio.launch(Manifest.permission.RECORD_AUDIO)
+                            AuditService.start(this, phoneId = phoneId)
+                        },
+                        onShareAuditClicked = {
+                            val path = latestAuditPath ?: return@ShrutiScreen
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "audio/wav"
+                                putExtra(Intent.EXTRA_STREAM, Uri.parse("file://$path"))
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            startActivity(Intent.createChooser(intent, "Share audit WAV"))
+                        },
+                        latestAuditPath = latestAuditPath,
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val filter = IntentFilter(AuditService.ACTION_AUDIT_DONE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(auditDoneReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(auditDoneReceiver, filter)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try {
+            unregisterReceiver(auditDoneReceiver)
+        } catch (_: Throwable) {
+            // already unregistered
         }
     }
 
@@ -138,6 +191,9 @@ class MainActivity : ComponentActivity() {
 private fun ShrutiScreen(
     onStartClicked: (phoneId: Int, isMaster: Boolean) -> Unit,
     onStopClicked: () -> Unit,
+    onAuditClicked: (phoneId: Int) -> Unit,
+    onShareAuditClicked: () -> Unit,
+    latestAuditPath: String?,
 ) {
     val ctx = LocalContext.current
     var phoneId by remember { mutableStateOf(IdentityConfig.phoneId(ctx)) }
@@ -270,7 +326,37 @@ private fun ShrutiScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text("3. Live readouts", fontWeight = FontWeight.SemiBold)
+                Text("3. Audit mode (T08)", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Records 30 s of audio to /sdcard/Android/data/" +
+                        "dev.shruti/files/Music/audit/<phone_id>_<ts>.wav " +
+                        "so the laptop's `shruti-audit` script can " +
+                        "analyse RMS / noise floor / sample rate.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Button(
+                    enabled = !sessionActive,
+                    onClick = { onAuditClicked(phoneId) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Start 30 s audit recording") }
+                Text(
+                    "Latest WAV: ${latestAuditPath ?: "[none yet]"}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedButton(
+                    enabled = latestAuditPath != null,
+                    onClick = onShareAuditClicked,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Share latest WAV") }
+            }
+        }
+
+        Card(elevation = CardDefaults.cardElevation(2.dp)) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("4. Live readouts", fontWeight = FontWeight.SemiBold)
                 Text("Sync: -- us", style = MaterialTheme.typography.titleLarge)
                 Text("Need: < 100 us", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.height(4.dp))

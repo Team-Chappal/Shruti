@@ -91,6 +91,28 @@ class ServerConfig:
 
 
 @dataclass(frozen=True)
+class AsrConfig:
+    """T06: which ASR engine to use.
+
+    The default `mock` requires no model and no extra
+    dependency; it produces a deterministic placeholder so
+    the rest of the pipeline has something to display
+    during dev and CI. The `sherpa` engine runs the
+    sherpa-onnx offline recognizer; the operator must
+    download a model first via `tools/fetch_asr.py` and
+    install `sherpa-onnx`.
+    """
+    engine: Literal["mock", "sherpa"] = "mock"
+    sherpa_encoder: str = "data/models/sherpa/encoder.onnx"
+    sherpa_decoder: str = "data/models/sherpa/decoder.onnx"
+    sherpa_joiner: str = "data/models/sherpa/joiner.onnx"
+    sherpa_tokens: str = "data/models/sherpa/tokens.txt"
+    sherpa_threads: int = 4
+    sherpa_language: str = "hi"
+    sherpa_sample_rate_hz: int = 16_000
+
+
+@dataclass(frozen=True)
 class AppConfig:
     audio: AudioConfig = field(default_factory=AudioConfig)
     chirp: ChirpConfig = field(default_factory=ChirpConfig)
@@ -98,6 +120,7 @@ class AppConfig:
     beam: BeamConfig = field(default_factory=BeamConfig)
     geometry: ArrayGeometry = field(default_factory=ArrayGeometry)
     server: ServerConfig = field(default_factory=ServerConfig)
+    asr: AsrConfig = field(default_factory=AsrConfig)
     data_dir: Path = Path("data")
 
     @classmethod

@@ -201,12 +201,14 @@ def test_sherpa_onnx_asr_call_count_increments() -> None:
     assert asr.call_count == 0
 
 
-def test_sherpa_onnx_asr_rejects_wrong_sample_rate() -> None:
-    """The scaffold explicitly raises ValueError when the
-    transcribe() sample rate doesn't match the configured
-    model sample rate. The team fills in the resampler
-    when wiring the real engine; until then, refuse
-    rather than silently mis-transcribe."""
+def test_sherpa_onnx_asr_resamples_48k_to_16k() -> None:
+    """T06: the laptop beamformer runs at 48 kHz; sherpa-onnx
+    expects 16 kHz. The scaffold now resamples rather than
+    rejecting, so the real run is not blocked by the
+    rate mismatch. The test patches _ensure_recognizer
+    to install a fake recogniser that records the
+    `accept_waveform` arguments, then asserts the audio
+    that reached the recogniser is at 16 kHz."""
     asr = sherpa_onnx.SherpaOnnxASR(
         config=sherpa_onnx.SherpaOnnxConfig(
             encoder="enc.onnx", decoder="dec.onnx", joiner="joiner.onnx",
@@ -214,17 +216,28 @@ def test_sherpa_onnx_asr_rejects_wrong_sample_rate() -> None:
             sample_rate_hz=16_000,
         )
     )
-    # The sample-rate check happens AFTER _ensure_recognizer
-    # (line 98 of sherpa_onnx.py), so we need the mock to
-    # actually set a recogniser — the post-check assertion
-    # `assert self._recognizer is not None` would fail
-    # otherwise.
+    captured: dict[str, object] = {}
     with mock.patch.object(asr, "_ensure_recognizer") as m:
-        def _set():
-            asr._recognizer = mock.MagicMock()  # noqa: SLF001
+        def _set() -> None:
+            rec = mock.MagicMock()
+            stream = mock.MagicMock()
+            rec.create_stream.return_value = stream
+            stream.result.text = "x"
+            # accept_waveform(sr, audio) — record the args.
+            def _accept(sr: int, audio: np.ndarray) -> None:
+                captured["sr"] = sr
+                captured["len"] = len(audio)
+            stream.accept_waveform.side_effect = _accept
+            asr._recognizer = rec  # noqa: SLF001
         m.side_effect = _set
-        with pytest.raises(ValueError, match="expected 16000 Hz"):
-            asr.transcribe(np.zeros(48_000, dtype=np.float32), 48_000)
+        # 48 kHz input, 48000 samples = 1 s.
+        asr.transcribe(np.zeros(48_000, dtype=np.float32), 48_000)
+    # The recogniser must have been called with the
+    # 16 kHz audio (48000 / 3 = 16000 samples).
+    assert captured["sr"] == 16_000
+    # Allow a small tolerance for the polyphase filter
+    # boundary effects.
+    assert abs(captured["len"] - 16_000) < 10
 
 
 # --- piper.PiperTTS (scaffold) ---

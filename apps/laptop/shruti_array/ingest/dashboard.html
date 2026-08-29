@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SHRUTI live</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --fg: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #f78166;
+    --good: #3fb950;
+    --bad: #f85149;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--fg);
+              font-family: 'Segoe UI', 'Inter', system-ui, sans-serif; }
+  body { padding: 24px; }
+  h1 { font-size: 32px; margin: 0 0 4px 0; font-weight: 600; }
+  .subtitle { color: var(--muted); font-size: 16px; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+          padding: 20px; }
+  .card h2 { margin: 0 0 12px 0; font-size: 18px; color: var(--muted);
+             font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+  .big { font-size: 96px; font-weight: 700; line-height: 1; color: var(--accent);
+         font-feature-settings: 'tnum' 1; }
+  .big .unit { font-size: 36px; color: var(--muted); margin-left: 8px; }
+  .uptime { font-size: 48px; font-weight: 600; color: var(--fg); }
+  .badge { display: inline-block; padding: 6px 12px; border-radius: 6px;
+           font-weight: 600; font-size: 16px; }
+  .badge.tier_1 { background: #1f6feb; color: #fff; }
+  .badge.tier_0 { background: #9e6a03; color: #fff; }
+  .health { display: flex; gap: 16px; flex-wrap: wrap; }
+  .health .dot { display: flex; align-items: center; gap: 8px;
+                 font-size: 18px; }
+  .health .ball { width: 18px; height: 18px; border-radius: 50%;
+                  background: var(--bad); display: inline-block; }
+  .health .ball.on { background: var(--good); }
+  .transcript { background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+                padding: 12px; min-height: 80px; font-size: 22px;
+                line-height: 1.4; color: var(--accent2); }
+  .transcript .placeholder { color: var(--muted); }
+  canvas { display: block; background: #0d1117; border-radius: 6px;
+           border: 1px solid #30363d; }
+  .meta { display: flex; gap: 24px; align-items: center;
+          margin-bottom: 16px; font-size: 16px; color: var(--muted); }
+  .meta strong { color: var(--fg); }
+  .footer { margin-top: 24px; color: var(--muted); font-size: 12px;
+            text-align: right; }
+</style>
+</head>
+<body>
+  <h1>SHRUTI live</h1>
+  <div class="subtitle">Three phones. One microphone. Zero mercy for noise.</div>
+  <div class="meta">
+    <div>Uptime: <span id="uptime" class="uptime">--</span></div>
+    <div>Pitch mode: <span id="pitchMode" class="badge tier_1">tier_1</span></div>
+    <div>Active phones: <span id="activePhones" class="badge tier_1">0</span></div>
+    <div>Last update: <span id="lastUpdate">--</span></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Sync offset</h2>
+      <div id="offset" class="big">--<span class="unit">&micro;s</span></div>
+      <div style="margin-top: 12px; color: var(--muted);">Target: &lt; 100 &micro;s</div>
+    </div>
+    <div class="card">
+      <h2>Speaker azimuth</h2>
+      <canvas id="radar" width="400" height="220"></canvas>
+    </div>
+    <div class="card">
+      <h2>Element health</h2>
+      <div id="health" class="health"></div>
+    </div>
+    <div class="card">
+      <h2>Transcript</h2>
+      <div id="transcript" class="transcript">
+        <span class="placeholder">[live transcript from ASR]</span>
+      </div>
+    </div>
+  </div>
+  <div class="footer">SHRUTI live dashboard. Polls /metrics every 2 s.</div>
+<script>
+  const offsetEl = document.getElementById('offset');
+  const uptimeEl = document.getElementById('uptime');
+  const pitchEl = document.getElementById('pitchMode');
+  const phonesEl = document.getElementById('activePhones');
+  const lastEl = document.getElementById('lastUpdate');
+  const healthEl = document.getElementById('health');
+  const transcriptEl = document.getElementById('transcript');
+  const radarCanvas = document.getElementById('radar');
+  const radarCtx = radarCanvas.getContext('2d');
+
+  function formatUptime(s) {
+    if (s == null) return '--';
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    return `${h}h ${String(m).padStart(2, '0')}m ${String(sec).padStart(2, '0')}s`;
+  }
+
+  function renderRadar(azimuthDeg) {
+    const w = radarCanvas.width, h = radarCanvas.height;
+    radarCtx.fillStyle = '#0d1117';
+    radarCtx.fillRect(0, 0, w, h);
+    // Concentric grid
+    radarCtx.strokeStyle = '#30363d';
+    radarCtx.lineWidth = 1;
+    const cx = w / 2, cy = h / 2;
+    for (const r of [30, 60, 90]) {
+      radarCtx.beginPath();
+      radarCtx.arc(cx, cy, r, 0, 2 * Math.PI);
+      radarCtx.stroke();
+    }
+    // Crosshair
+    radarCtx.beginPath();
+    radarCtx.moveTo(0, cy); radarCtx.lineTo(w, cy);
+    radarCtx.moveTo(cx, 0); radarCtx.lineTo(cx, h);
+    radarCtx.stroke();
+    if (azimuthDeg != null && isFinite(azimuthDeg)) {
+      const a = (azimuthDeg - 90) * Math.PI / 180;
+      const r = 80;
+      const dx = cx + r * Math.cos(a);
+      const dy = cy + r * Math.sin(a);
+      radarCtx.fillStyle = '#f78166';
+      radarCtx.beginPath();
+      radarCtx.arc(dx, dy, 10, 0, 2 * Math.PI);
+      radarCtx.fill();
+    }
+  }
+
+  function parseMetrics(text) {
+    const out = {};
+    for (const rawLine of text.split('\n')) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      const m = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\{([^}]*)\}\s+(-?[\d.eE+-]+)$/);
+      if (m) {
+        const labels = {};
+        for (const pair of m[2].split(',')) {
+          const [k, v] = pair.split('=');
+          labels[k.trim()] = v.replace(/"/g, '').trim();
+        }
+        out[m[1]] = out[m[1]] || [];
+        out[m[1]].push({ labels, value: parseFloat(m[3]) });
+        continue;
+      }
+      const m2 = line.match(/^([a-zA-Z_][a-zA-Z0-9_]*)\s+(-?[\d.eE+-]+)$/);
+      if (m2) {
+        out[m2[1]] = out[m2[1]] || [];
+        out[m2[1]].push({ labels: {}, value: parseFloat(m2[2]) });
+      }
+    }
+    return out;
+  }
+
+  function pickGauge(metrics, name) {
+    const arr = metrics[name];
+    if (!arr || !arr.length) return null;
+    return arr[arr.length - 1].value;
+  }
+
+  function pickLabeled(metrics, name) {
+    return (metrics[name] || []);
+  }
+
+  async function refresh() {
+    try {
+      const resp = await fetch('/metrics', { cache: 'no-store' });
+      const text = await resp.text();
+      const metrics = parseMetrics(text);
+      const off = pickGauge(metrics, 'shruti_sync_offset_microseconds');
+      const up = pickGauge(metrics, 'shruti_laptop_uptime_s');
+      const pm = pickGauge(metrics, 'shruti_pitch_mode');
+      const ap = pickGauge(metrics, 'shruti_active_phones');
+      const az = pickGauge(metrics, 'shruti_radar_azimuth_deg');
+      const tr = pickGauge(metrics, 'shruti_asr_transcript_length_chars');
+      const health = pickLabeled(metrics, 'shruti_element_healthy');
+      if (off != null) {
+        offsetEl.innerHTML = `${off.toFixed(1)}<span class="unit">&micro;s</span>`;
+      }
+      if (up != null) {
+        uptimeEl.textContent = formatUptime(up);
+      }
+      if (pm != null) {
+        const mode = pm >= 1 ? 'tier_1' : 'tier_0';
+        pitchEl.textContent = mode;
+        pitchEl.className = 'badge ' + mode;
+      }
+      if (ap != null) {
+        phonesEl.textContent = String(Math.round(ap));
+      }
+      if (az != null) {
+        renderRadar(az);
+      } else {
+        renderRadar(null);
+      }
+      healthEl.innerHTML = '';
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        const ball = document.createElement('span');
+        ball.className = 'ball';
+        const found = health.find((s) => s.labels.phone === String(i));
+        if (found && found.value > 0) ball.classList.add('on');
+        dot.appendChild(ball);
+        dot.appendChild(document.createTextNode('Phone ' + i));
+        healthEl.appendChild(dot);
+      }
+      if (tr != null && tr > 0) {
+        transcriptEl.innerHTML = '[transcript length: ' + Math.round(tr) + ' chars]';
+        transcriptEl.classList.remove('placeholder');
+      }
+      lastEl.textContent = new Date().toLocaleTimeString();
+    } catch (e) {
+      lastEl.textContent = 'err: ' + e.message;
+    }
+  }
+
+  refresh();
+  setInterval(refresh, 2000);
+</script>
+</body>
+</html>

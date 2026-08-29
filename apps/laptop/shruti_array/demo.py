@@ -15,16 +15,23 @@ works, the production code path is exercised end-to-end.
 The synthetic phones' audio is a 440 Hz tone aimed at a moving
 target position; the beamformed output will track the target.
 The text radar prints to the terminal showing the dot moving.
+
+T15: `--record-toggle DIR` enables a per-frame beamformed-WAV
+recorder. The recorder writes one PCM16 mono file per phone
+plus a `*_beamformed.wav` on `finalise()` — the toggle-moment
+asset for demo day. See `recorder.py` for the file layout.
 """
 from __future__ import annotations
 
 import asyncio
 import time
+from pathlib import Path
 
 import numpy as np
 
 from .config import AppConfig
 from .dsp_loop import DspLoop, SyntheticPhoneSource
+from .recorder import LoopRecorder
 from .render.console_radar import RadarState, render_to_terminal
 from .render.overlays import TranscriptLine
 from .sync.alignment import StreamAligner
@@ -35,8 +42,16 @@ async def _run_demo(
     duration_s: float = 8.0,
     target_speed_rps: float = 0.5,  # radians per second of target motion
     force_ascii: bool = False,
+    record_dir: Path | None = None,
 ) -> None:
-    """Drive the pipeline for `duration_s` seconds. End-to-end."""
+    """Drive the pipeline for `duration_s` seconds. End-to-end.
+
+    T15: when `record_dir` is not None, every `DspLoop.step()`
+    that produces a `LoopFrame` is also fed into a `LoopRecorder`
+    which writes one WAV per phone + one beamformed WAV on
+    `finalise()`. The recorder is finalised in a `finally` so
+    a `KeyboardInterrupt` still produces a complete file set.
+    """
     cfg = AppConfig.default()
     aligner = StreamAligner()
     for pid in range(n_phones):
@@ -56,6 +71,17 @@ async def _run_demo(
     ]
     # The DSP loop drives the radar.
     loop = DspLoop(aligner, geometry=cfg.geometry)
+    # T15: optional per-frame beamformed-WAV recorder. Constructed
+    # only when the user asked for it (zero overhead in the common
+    # path). `record_dir` is created at `finalise()` time, not
+    # earlier, so a dry-run demo doesn't leave an empty directory.
+    recorder: LoopRecorder | None = None
+    if record_dir is not None:
+        recorder = LoopRecorder(
+            out_dir=record_dir,
+            phone_ids=list(range(n_phones)),
+            sample_rate_hz=cfg.audio.sample_rate_hz,
+        )
     # We don't run the WebSocket server in the demo: the synthetic
     # sources feed PCM directly into the loop's per-phone buffer.
     # The full WebSocket path is exercised by test_ingest_e2e.py.
@@ -63,49 +89,64 @@ async def _run_demo(
     frame_n_samples = 960  # 20 ms @ 48 kHz; matches the wire format
     target_radius = 1.0
     last_render_s = started
-    while time.time() - started < duration_s:
-        t_s = time.time() - started
-        # Move the target on a circle. The synthetic sources
-        # currently don't use target_position for anything (the
-        # tone is fixed at 440 Hz); the radar gets the localiser
-        # output, which we feed as a moving dot to demonstrate
-        # the visual track.
-        azimuth = target_speed_rps * t_s
-        target_x = target_radius * float(np.cos(azimuth))
-        target_y = target_radius * float(np.sin(azimuth))
-        # Feed 4 frames' worth of audio to each phone (= 1
-        # beamforming window) before each step.
-        for _ in range(loop.window_n_frames):
-            for src in sources:
-                pcm = src.next_frame()
-                loop.buffer_pcm(src.phone_id, pcm)
-        frame = loop.step()
-        if frame is not None and time.time() - last_render_s > 0.2:
-            last_render_s = time.time()
-            # The localiser may not converge; if it doesn't, fall
-            # back to the simulated target so the radar still
-            # shows a moving dot (the demo has to look alive).
-            pos = frame.position_xy if frame.position_xy is not None else (target_x, target_y)
-            state = RadarState(
-                position=pos,
-                sync_stability_us=42.0,
-                uptime_s=time.time() - started,
-                beamform_active=True,
-                transcript_lines=[
-                    TranscriptLine(
-                        track_id=t.track_id,
-                        text=(
-                            f"[demo speaker @ {np.rad2deg(np.arctan2(pos[1], pos[0])):+5.1f} deg]"
-                        ),
-                        language="en",
-                        confidence=1.0,
-                    )
-                    for t in frame.tracks[:3]
-                ],
-            )
-            render_to_terminal(state, force_ascii=force_ascii)
-        # Pace to roughly real-time: 1 window every 80 ms.
-        await asyncio.sleep(loop.window_n_frames * frame_n_samples / cfg.audio.sample_rate_hz)
+    try:
+        while time.time() - started < duration_s:
+            t_s = time.time() - started
+            # Move the target on a circle. The synthetic sources
+            # currently don't use target_position for anything (the
+            # tone is fixed at 440 Hz); the radar gets the localiser
+            # output, which we feed as a moving dot to demonstrate
+            # the visual track.
+            azimuth = target_speed_rps * t_s
+            target_x = target_radius * float(np.cos(azimuth))
+            target_y = target_radius * float(np.sin(azimuth))
+            # Feed 4 frames' worth of audio to each phone (= 1
+            # beamforming window) before each step.
+            for _ in range(loop.window_n_frames):
+                for src in sources:
+                    pcm = src.next_frame()
+                    loop.buffer_pcm(src.phone_id, pcm)
+            frame = loop.step()
+            # T15: hand the frame to the recorder if enabled.
+            if frame is not None and recorder is not None:
+                recorder.record(frame)
+            if frame is not None and time.time() - last_render_s > 0.2:
+                last_render_s = time.time()
+                # The localiser may not converge; if it doesn't, fall
+                # back to the simulated target so the radar still
+                # shows a moving dot (the demo has to look alive).
+                pos = frame.position_xy if frame.position_xy is not None else (target_x, target_y)
+                state = RadarState(
+                    position=pos,
+                    sync_stability_us=42.0,
+                    uptime_s=time.time() - started,
+                    beamform_active=True,
+                    transcript_lines=[
+                        TranscriptLine(
+                            track_id=t.track_id,
+                            text=(
+                                f"[demo speaker @ {np.rad2deg(np.arctan2(pos[1], pos[0])):+5.1f} deg]"
+                            ),
+                            language="en",
+                            confidence=1.0,
+                        )
+                        for t in frame.tracks[:3]
+                    ],
+                )
+                render_to_terminal(state, force_ascii=force_ascii)
+            # Pace to roughly real-time: 1 window every 80 ms.
+            await asyncio.sleep(loop.window_n_frames * frame_n_samples / cfg.audio.sample_rate_hz)
+    finally:
+        # T15: even on Ctrl-C, write the WAVs we have. The
+        # recorder's `finalise()` is idempotent so a clean exit
+        # followed by a teardown ordering change still produces
+        # one file set.
+        if recorder is not None:
+            paths = recorder.finalise()
+            for p in paths:
+                # Log to stderr (stdout is the radar). Avoid
+                # importing the render module just for a print.
+                print(f"  recorded: {p}", flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -123,6 +164,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--speed", type=float, default=0.5, help="Target angular speed, rad/s (default 0.5)")
     p.add_argument("--ascii", action="store_true",
                    help="Use ASCII glyphs only (Windows cp1252 console)")
+    p.add_argument(
+        "--record-toggle", type=str, default=None, metavar="DIR",
+        help="T15: write per-phone + beamformed WAVs to DIR for the "
+        "duration of the demo. One `<run_id>_phone<N>.wav` per "
+        "phone plus one `<run_id>_beamformed.wav`.",
+    )
     args = p.parse_args(argv)
     if args.phones < 2:
         # We need at least 2 channels for GCC-PHAT to produce a
@@ -135,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             duration_s=args.seconds,
             target_speed_rps=args.speed,
             force_ascii=args.ascii,
+            record_dir=Path(args.record_toggle) if args.record_toggle else None,
         ))
     except KeyboardInterrupt:
         return 0

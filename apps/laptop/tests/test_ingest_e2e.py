@@ -122,25 +122,103 @@ async def test_three_phones_each_registered_separately() -> None:
     WebSocket closes, so we have to snapshot the server's view
     *while* all three connections are still alive rather than
     after the `async with` contexts have exited.
+
+    Implementation note: this is the fourth revision of the
+    test. The three earlier versions (shared-dict snapshot,
+    per-client snapshot with fixed sleep, per-client snapshot
+    with server-state polling, and barrier-only synchronisation)
+    each closed one race but exposed another:
+
+    1. Shared dict: last writer wins. The last client to write
+       was often the one whose connection was the only one
+       still alive.
+    2. Fixed sleep: client could read before the server had
+       processed its own registration, or after another
+       client's disconnect had been processed.
+    3. Server-state polling: timing-dependent — clients 0/1
+       could release their poll (see all 3 registered) while
+       client 2 was still mid-poll and read its snapshot alone
+       (with phones 0/1 already disconnected by the server).
+    4. Barrier-only: barrier released before the server had
+       processed any registrations, so every client read an
+       empty `_connections`.
+
+    The correct fix combines barrier + server-state poll:
+    each client polls `len(server.all_phone_ids()) == 3`
+    inside its `async with` (proving all 3 phones are
+    registered on the server) and *then* arrives at the
+    barrier. After the barrier releases, every client
+    reads the snapshot while all 3 connections are still
+    open (because the barrier is awaited inside the
+    `async with`).
+
+    The poll timeout is 5 s, generous enough for any
+    reasonable CI runner. If a client times out, the
+    assertion fires with the actual `_connections` state
+    so the team can diagnose.
+
+    This was a real CI flake surfaced by T15: 3.10/3.12
+    (fast runners) saw `[1, 2]`, 3.11 saw `[2]`, and
+    the barrier-only version saw `[]`. The combined
+    barrier + poll closes every race in the snapshot
+    sequence.
     """
     async with _running_server() as (server, cfg):
         url = f"ws://{cfg.host}:{cfg.port}"
 
-        server_state: dict[str, list[int]] = {"snapshot": []}
+        # Coordination barrier: all 3 clients arrive here
+        # *after* the server has registered all 3 phones.
+        # Python 3.10-compatible (asyncio.Barrier is 3.11+).
+        arrived = 0
+        all_arrived = asyncio.Event()
+
+        async def arrive_and_wait(n_clients: int) -> None:
+            nonlocal arrived
+            arrived += 1
+            if arrived == n_clients:
+                all_arrived.set()
+            await all_arrived.wait()
+
+        # Per-client snapshot list. After the barrier, every
+        # client reads the server's view while all 3 are alive.
+        snapshots: list[list[int]] = []
 
         async def client(phone_id: int) -> None:
             async with websockets.connect(url) as ws:
                 await ws.send(_audio_packet(phone_id=phone_id, sequence=0))
                 await ws.send(_audio_packet(phone_id=phone_id, sequence=1))
-                # Give the server a moment to drain the asyncio queue.
-                await asyncio.sleep(0.1)
-                # Snapshot the server's view while the connection
-                # is still alive. T11's disconnect handler will
-                # remove us on context exit.
-                server_state["snapshot"] = sorted(server.all_phone_ids())
+                # Wait for the server to register all 3 phones.
+                # This proves the server has processed at least
+                # the first packet from each client, so the
+                # SHRUTI-level registration is complete (not
+                # just the WebSocket-level connection).
+                deadline = asyncio.get_event_loop().time() + 5.0
+                while (
+                    len(server.all_phone_ids()) < 3
+                    and asyncio.get_event_loop().time() < deadline
+                ):
+                    await asyncio.sleep(0.01)
+                # Rendezvous with the other 2 clients before
+                # reading. Inside the `async with`, so all 3
+                # connections are still open on the server.
+                # By the time we get here, the server has
+                # registered all 3 phones; the barrier just
+                # ensures all 3 clients read the snapshot at
+                # the same instant, before any `async with`
+                # can exit and trigger a disconnect handler.
+                await arrive_and_wait(3)
+                snapshots.append(sorted(server.all_phone_ids()))
 
         await asyncio.gather(client(0), client(1), client(2))
-        assert server_state["snapshot"] == [0, 1, 2]
+        # All 3 clients should have seen all 3 phones alive
+        # at the moment of the rendezvous. If any client saw
+        # fewer than 3, the barrier or poll didn't work as
+        # expected — fail loudly so the team notices.
+        for i, snap in enumerate(snapshots):
+            assert snap == [0, 1, 2], (
+                f"client {i} saw {snap}, expected [0, 1, 2]; "
+                f"all 3 snapshots = {snapshots}"
+            )
 
 
 @pytest.mark.asyncio

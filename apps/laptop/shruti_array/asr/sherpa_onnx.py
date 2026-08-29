@@ -19,6 +19,8 @@ import os
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from . import ASR, TranscriptSegment
 
 if TYPE_CHECKING:
@@ -98,17 +100,23 @@ class SherpaOnnxASR(ASR):
         self._ensure_recognizer()
         assert self._recognizer is not None  # narrowed by _ensure_recognizer
         self._call_count += 1
+        # T06: resample 48 kHz (laptop beamformer output) to
+        # 16 kHz (sherpa-onnx's expected rate). The previous
+        # version raised on a rate mismatch; that broke any
+        # real run because the laptop always hands 48 kHz to
+        # the ASR. Use scipy.signal.resample_poly for an
+        # exact rational resample (48/16 = 3).
         if sample_rate_hz != self.config.sample_rate_hz:
-            # The laptop beamformer runs at 48 kHz; sherpa-onnx
-            # typically expects 16 kHz. The team fills in the
-            # resampling here; for now we just refuse and let
-            # the operator see the error rather than silently
-            # mis-transcribing.
-            raise ValueError(
-                f"expected {self.config.sample_rate_hz} Hz, got {sample_rate_hz}; "
-                "add a resampler in sherpa_onnx_asr.transcribe"
-            )
-        audio = samples.astype("float32") / 32768.0
+            from math import gcd
+
+            from scipy.signal import resample_poly
+            g = gcd(sample_rate_hz, self.config.sample_rate_hz)
+            up = self.config.sample_rate_hz // g
+            down = sample_rate_hz // g
+            audio_in = samples.astype("float32") / 32768.0
+            audio = resample_poly(audio_in, up, down).astype(np.float32)
+        else:
+            audio = samples.astype("float32") / 32768.0
         stream = self._recognizer.create_stream()
         stream.accept_waveform(self.config.sample_rate_hz, audio)
         self._recognizer.decode_streams([stream])

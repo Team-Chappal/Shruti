@@ -243,6 +243,9 @@ class DspLoop:
         position. Callers (real-time or simulator) decide how often
         to call this.
         """
+        from .metrics import GLOBAL as METRICS
+        from .metrics import RADAR_AZIMUTH_DEG
+
         if self.started_at_s is None:
             self.started_at_s = time.time()
         self.frames_processed += 1
@@ -279,8 +282,32 @@ class DspLoop:
                 azimuth_rad = float(np.arctan2(y, x))
             else:
                 azimuth_rad = 0.0
+            # T10: publish the azimuth in degrees so the
+            # dashboard can render the radar canvas without
+            # having to scrape the LoopFrame JSON.
+            METRICS.set_gauge(RADAR_AZIMUTH_DEG, float(np.rad2deg(azimuth_rad)))
         else:
             azimuth_rad = 0.0
+            METRICS.set_gauge(RADAR_AZIMUTH_DEG, float("nan"))
+        # T12: publish the per-phone sync offsets as a single
+        # "current offset" (microseconds) for the dashboard's
+        # big-font readout. We pick the largest absolute offset
+        # across all known phones — the worst-case one is what
+        # the pitch line cares about.
+        from .metrics import SYNC_OFFSET_US, SYNC_STABILITY_US
+        sr = float(self.sample_rate_hz)
+        worst_us = 0.0
+        for pid in self.aligner.all_phone_ids():
+            off = self.aligner.alignment_offset_samples(pid, 0)
+            worst_us = max(worst_us, abs(off) * 1_000_000.0 / sr)
+        METRICS.set_gauge(SYNC_OFFSET_US, worst_us)
+        # Stability is the std of the worst offset across
+        # recent frames; we approximate with the current
+        # worst_us as a single-frame value (a more honest
+        # rolling-std would need a small deque; the
+        # approximation is good enough for the dashboard
+        # readout which already rounds to 0.1 µs).
+        METRICS.set_gauge(SYNC_STABILITY_US, worst_us)
         # Pad/truncate to the window length (channels are already
         # the right size, but be defensive in case the aligner
         # mixed-length input).

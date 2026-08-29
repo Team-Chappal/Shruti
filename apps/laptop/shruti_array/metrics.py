@@ -85,6 +85,13 @@ BEAMFORM_OUTPUT_DB = "shruti_beamform_output_db"
 ASR_TRANSCRIPT_LENGTH = "shruti_asr_transcript_length_chars"
 REGRESSION_MVDR_SI_SDR = "shruti_regression_mvdr_si_sdr_db"
 REGRESSION_DAS_SI_SDR = "shruti_regression_das_si_sdr_db"
+# T10: per-phone health (labelled gauge). 1 = healthy, 0 = not connected.
+ELEMENT_HEALTHY = "shruti_element_healthy"
+# T10: speaker azimuth in degrees (gauge; 0..360). NaN when no lock.
+RADAR_AZIMUTH_DEG = "shruti_radar_azimuth_deg"
+# T12: file-backed laptop uptime, pitch mode flag.
+LAPTOP_UPTIME_S = "shruti_laptop_uptime_s"
+PITCH_MODE = "shruti_pitch_mode"
 
 
 __all__ = [
@@ -103,4 +110,8 @@ __all__ = [
     "ASR_TRANSCRIPT_LENGTH",
     "REGRESSION_MVDR_SI_SDR",
     "REGRESSION_DAS_SI_SDR",
+    "ELEMENT_HEALTHY",
+    "RADAR_AZIMUTH_DEG",
+    "LAPTOP_UPTIME_S",
+    "PITCH_MODE",
 ]

@@ -47,6 +47,26 @@ python -m pip install -e ".[dev,ui]"
 PYTHONUTF8=1 make test-fast
 ```
 
+T06: the demo's default ASR is the `MockASR` (deterministic
+placeholder, no model download). To use a real Indic model
+on event day:
+
+```sh
+# 1. Install the sherpa-onnx Python wheel (about 30 MB; not in
+#    pyproject.toml because it's only needed for the real run).
+pip install sherpa-onnx
+
+# 2. Download a model. The default target is a 40 MB English
+#    Zipformer that's small enough to test the wiring; the team
+#    replaces the URLs in tools/fetch_asr.py for IndicWhisper
+#    or IndicConformer.
+python -m tools.fetch_asr --target tiny
+
+# 3. Run with the real engine.
+export SHRUTI_ASR_ENGINE=sherpa
+python -m shruti_array.cli demo --seconds 10
+```
+
 The test suite runs the protocol packetizer (including its CRC-32C
 self-test against the iSCSI test vector), the chirp generator, the
 cross-correlation-based offset estimation, GCC-PHAT, the

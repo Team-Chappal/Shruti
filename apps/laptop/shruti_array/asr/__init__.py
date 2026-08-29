@@ -6,11 +6,21 @@ turn a chunk of beamformed audio into a piece of text. The default ship
 is `MockASR` (echoes back a placeholder so the rest of the pipeline has
 something to display during testing); the team plugs in their
 QNN-exported IndicWhisper/IndicConformer on the device.
+
+T06: the `make_asr(config)` factory selects the engine based on
+`AsrConfig.engine`. The default is `mock` (no model, no extra
+dependency, no 300 MB download). Set `SHRUTI_ASR_ENGINE=sherpa` and
+run `tools/fetch_asr.py` to use the real sherpa-onnx backend.
 """
 from __future__ import annotations
 
 import abc
+import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..config import AsrConfig
 
 
 @dataclass(frozen=True)
@@ -67,3 +77,38 @@ class MockASR(ASR):
             confidence=0.0,
             language=self.language,
         )]
+
+
+def make_asr(config: AsrConfig | None = None) -> ASR:
+    """Factory: build the ASR engine selected by config.
+
+    Reads `SHRUTI_ASR_ENGINE` to override the config; defaults to
+    the config's value (or `mock` if no config is supplied).
+    """
+    from ..config import AsrConfig
+    cfg = config or AsrConfig()
+    engine = os.environ.get("SHRUTI_ASR_ENGINE", cfg.engine).strip().lower()
+    if engine == "mock":
+        return MockASR(language=cfg.sherpa_language if engine == "mock" else "en")
+    if engine == "sherpa":
+        from .sherpa_onnx import SherpaOnnxASR, SherpaOnnxConfig
+        return SherpaOnnxASR(SherpaOnnxConfig(
+            encoder=cfg.sherpa_encoder,
+            decoder=cfg.sherpa_decoder,
+            joiner=cfg.sherpa_joiner,
+            tokens=cfg.sherpa_tokens,
+            num_threads=cfg.sherpa_threads,
+            sample_rate_hz=cfg.sherpa_sample_rate_hz,
+            language=cfg.sherpa_language,
+        ))
+    raise ValueError(
+        f"unknown ASR engine {engine!r}; expected 'mock' or 'sherpa'"
+    )
+
+
+__all__ = [
+    "ASR",
+    "MockASR",
+    "TranscriptSegment",
+    "make_asr",
+]

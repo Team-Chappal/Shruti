@@ -22,7 +22,8 @@ def test_demo_main_uses_default_args() -> None:
         rc = demo.main([])
     assert rc == 0
     m.assert_called_once_with(
-        n_phones=3, duration_s=8.0, target_speed_rps=0.5, force_ascii=False,
+        n_phones=3, duration_s=8.0, target_speed_rps=0.5,
+        force_ascii=False, record_dir=None,
     )
 
 
@@ -40,7 +41,8 @@ def test_demo_main_forwards_overrides() -> None:
         ])
     assert rc == 0
     m.assert_called_once_with(
-        n_phones=2, duration_s=1.0, target_speed_rps=1.5, force_ascii=False,
+        n_phones=2, duration_s=1.0, target_speed_rps=1.5,
+        force_ascii=False, record_dir=None,
     )
 
 
@@ -102,7 +104,8 @@ def test_demo_main_accepts_two_phones() -> None:
         rc = demo.main(["--phones", "2", "--seconds", "0.1"])
     assert rc == 0
     m.assert_called_once_with(
-        n_phones=2, duration_s=0.1, target_speed_rps=0.5, force_ascii=False,
+        n_phones=2, duration_s=0.1, target_speed_rps=0.5,
+        force_ascii=False, record_dir=None,
     )
 
 
@@ -115,5 +118,26 @@ def test_demo_main_forwards_ascii_flag() -> None:
         rc = demo.main(["--ascii", "--seconds", "0.1"])
     assert rc == 0
     m.assert_called_once_with(
-        n_phones=3, duration_s=0.1, target_speed_rps=0.5, force_ascii=True,
+        n_phones=3, duration_s=0.1, target_speed_rps=0.5,
+        force_ascii=True, record_dir=None,
+    )
+
+
+def test_demo_main_forwards_record_toggle(tmp_path) -> None:
+    """T15: `demo --record-toggle DIR` should pass a non-None
+    `record_dir` (a `Path`) through to `_run_demo`."""
+    from pathlib import Path
+    target = tmp_path / "toggle"
+    async def fake_run(**kwargs):
+        return None
+
+    with mock.patch.object(demo, "_run_demo", side_effect=fake_run) as m:
+        rc = demo.main([
+            "--record-toggle", str(target),
+            "--seconds", "0.1",
+        ])
+    assert rc == 0
+    m.assert_called_once_with(
+        n_phones=3, duration_s=0.1, target_speed_rps=0.5,
+        force_ascii=False, record_dir=Path(str(target)),
     )

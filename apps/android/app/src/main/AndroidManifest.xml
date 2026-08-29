@@ -43,6 +43,11 @@
             android:foregroundServiceType="microphone" />
 
         <service
+            android:name=".capture.AuditService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <service
             android:name=".sync.ChirpService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
