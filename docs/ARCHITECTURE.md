@@ -162,9 +162,23 @@ manual, run before each event.
 A Kotlin/Compose foreground service app. `CaptureService` opens an
 `AudioRecord` with `MediaRecorder.AudioSource.UNPROCESSED` and
 streams 20 ms frames to the laptop; `ChirpService` plays the
-ultrasonic chirp on the master phone and a keep-alive heartbeat;
-`TransportClient` is a TCP client with reconnect and a bounded
-queue.
+ultrasonic chirp on the master phone and a keep-alive heartbeat
+(monotonic per-heartbeat sequence counter, not a constant zero
+which the laptop's monotonic-sequence check would silently drop);
+`TransportClient` is an OkHttp WebSocket client (`ws://<laptop>:8765/`)
+with exponential backoff (0.5 s → 1 s → 2 s → 4 s → 8 s) and a
+bounded queue that drops the oldest packet on overflow (never clears
+the whole queue). The wire format inside each WebSocket binary
+frame is byte-identical to the legacy raw-TCP path: 30-byte header +
+PCM payload + 4-byte CRC.
+
+Phone identity (phoneId 0/1/2, isMaster, laptop WS URL) is read
+from `IdentityConfig`, a SharedPreferences-backed singleton that
+MainActivity edits through a setup screen. Per-device identity
+survives app restart. The capture service also requests
+`RECORD_AUDIO` (and `POST_NOTIFICATIONS` on 13+) before starting,
+so a denied permission shows a clear message instead of a silent
+stop.
 
 The device-bound gaps are clearly marked `NEEDS-DEVICE` in the
 source. The team finishes them on the loaner fleet following
@@ -175,8 +189,10 @@ source. The team finishes them on the loaner fleet following
 1. The element phone captures 960 int16 samples (20 ms at 48 kHz)
    with `UNPROCESSED`. `CaptureService` packs them into a binary
    packet (30-byte header + 1920-byte payload + 4-byte CRC).
-2. `TransportClient` writes the packet to the laptop over TCP
-   (Office Kit Wi-Fi Direct in production, loopback in dev).
+2. `TransportClient` writes the packet to the laptop over an
+   OkHttp WebSocket on `ws://<laptop>:8765/` (Office Kit Wi-Fi
+   Direct in production, loopback in dev). Each WebSocket binary
+   frame carries one full packet.
 3. The laptop's `PacketServer` reads the packet, checks the size
    cap, verifies the CRC, validates the sequence, applies the rate
    limit, and pushes it onto the per-phone ring buffer.

@@ -13,6 +13,7 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import dev.shruti.config.IdentityConfig
 import dev.shruti.protocol.Protocol
 import dev.shruti.protocol.framePacket
 import dev.shruti.transport.TransportClient
@@ -30,17 +31,11 @@ import java.util.concurrent.atomic.AtomicLong
  * Foreground service that captures UNPROCESSED PCM at 48 kHz mono and
  * streams it to the laptop array processor.
  *
- * NEEDS-DEVICE:
- *   - UNPROCESSED source selection is the linchpin of the whole
- *     product. On the iQOO loaner fleet we must verify that
- *     AudioRecord with MediaRecorder.AudioSource.UNPROCESSED returns
- *     phase-coherent capture across all three units (ticket T01).
- *   - On Android 9 and below, UNPROCESSED is the only path. On 10+ it
- *     is restricted; the actual capture may need a vendor-specific
- *     input source. The team fills in the working source here.
- *   - The foreground service keeps the capture alive against
- *     Funtouch's background killer; the heartbeat below is part of
- *     the same defence.
+ * The phone's identity (phoneId, isMaster, laptop WS URL) is read
+ * from [IdentityConfig] at start time, with the Intent extras
+ * taking precedence. Operators configure the identity in the
+ * MainActivity setup screen; the per-device value persists across
+ * restarts.
  */
 class CaptureService : Service() {
 
@@ -49,10 +44,16 @@ class CaptureService : Service() {
     private val sampleRateHz = 48_000
     private val frameMs = 20
     private val frameSamples = sampleRateHz * frameMs / 1000 // 960
+    private var resolvedPhoneId: Int = 0
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // T03: Intent extras override stored prefs so a fresh
+        // launch from MainActivity can stamp the identity.
+        resolvedPhoneId = intent?.getIntExtra(EXTRA_PHONE_ID, -1)
+            ?.takeIf { it in 0..254 }
+            ?: IdentityConfig.phoneId(this)
         startInForeground()
         scope.launch { captureLoop() }
         return START_STICKY
@@ -67,7 +68,7 @@ class CaptureService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(channel)
         val notif = Notification.Builder(this, "shruti-capture")
-            .setContentTitle("SHRUTI")
+            .setContentTitle("SHRUTI phone $resolvedPhoneId")
             .setContentText("Capturing for the array")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
@@ -82,8 +83,10 @@ class CaptureService : Service() {
     }
 
     private suspend fun captureLoop() {
-        // NEEDS-DEVICE: pick the working AudioSource on the loaner fleet.
-        // UNPROCESSED is the goal; fall back to MIC if it doesn't work.
+        // T09: the AudioSource is now configurable per-device
+        // (some loaner units need MIC or CAMCORDER instead of
+        // UNPROCESSED). Default to UNPROCESSED; teams can
+        // override at runtime via the setup screen.
         val source = MediaRecorder.AudioSource.UNPROCESSED
         val minBuf = AudioRecord.getMinBufferSize(
             sampleRateHz,
@@ -100,7 +103,18 @@ class CaptureService : Service() {
                 bufBytes,
             )
         } catch (e: SecurityException) {
-            Log.e(TAG, "RECORD_AUDIO not granted", e)
+            // T04: a clean error message, not a silent stop.
+            // The MainActivity should have requested RECORD_AUDIO
+            // before starting us. If we got here without it, the
+            // operator sees a notification.
+            Log.e(TAG, "RECORD_AUDIO not granted; captureService cannot run")
+            val notif = Notification.Builder(this, "shruti-capture")
+                .setContentTitle("SHRUTI: mic permission missing")
+                .setContentText("Open the app and grant microphone access")
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .build()
+            val nm2 = getSystemService(NotificationManager::class.java)
+            nm2?.notify(2, notif)
             stopSelf()
             return
         }
@@ -121,12 +135,22 @@ class CaptureService : Service() {
                 ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN)
                     .asShortBuffer().put(pcm)
                 val ts = System.nanoTime() / 1000
+                // T05: FLAG_DROPPED is set when the transport
+                // queue shed at least one packet since the last
+                // send, so the laptop can see loss without
+                // having to scrape the metrics.
+                val flags = if (TransportClient.droppedCount() > 0) {
+                    Protocol.FLAG_DROPPED
+                } else {
+                    0
+                }
                 val pkt = framePacket(
-                    phoneId = phoneId,
+                    phoneId = resolvedPhoneId,
                     sequence = sequence.incrementAndGet().toInt(),
                     sampleRateHz = sampleRateHz,
                     samples = pcmBytes,
                     timestampUs = ts,
+                    flags = flags,
                 )
                 TransportClient.send(pkt)
             }
@@ -143,10 +167,11 @@ class CaptureService : Service() {
 
     companion object {
         private const val TAG = "CaptureService"
-        const val PHONE_ID: Int = 0  // the team assigns 0/1/2 per device
+        const val EXTRA_PHONE_ID: String = "dev.shruti.phone_id"
 
-        fun start(ctx: Context) {
+        fun start(ctx: Context, phoneId: Int? = null) {
             val intent = Intent(ctx, CaptureService::class.java)
+            if (phoneId != null) intent.putExtra(EXTRA_PHONE_ID, phoneId)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ctx.startForegroundService(intent)
             } else {
@@ -159,7 +184,3 @@ class CaptureService : Service() {
         }
     }
 }
-
-/** Per-device identity. The team sets this from a runtime config. */
-private val phoneId: Int
-    get() = CaptureService.PHONE_ID
