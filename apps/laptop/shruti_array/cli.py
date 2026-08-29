@@ -35,6 +35,8 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--ascii", action="store_true",
                    help="Use ASCII glyphs only (Windows cp1252 console)")
 
+    sub.add_parser("synth-corpus", help="Generate a deterministic synthetic corpus.")
+
     d = sub.add_parser(
         "dial",
         help="Dial the phones directly via WebSocket and read the audio. "
@@ -104,6 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--out", type=str, default="data/audit/report.json")
 
     args = p.parse_args(argv)
+    if args.cmd == "synth-corpus":
+        from .tools.corpus import main as corpus_main
+        return corpus_main(["synth", "--out", "data/corpus/synth"])
     if args.cmd == "dial":
         from .ingest.phone_dialer import main as dial_main
         # Pass through the --phone / --port / --duration flags.

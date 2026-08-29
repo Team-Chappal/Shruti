@@ -45,11 +45,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import time
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import websockets
-from websockets.asyncio.client import ClientConnection
 
 from ..log import get_logger
 from ..protocol import (
