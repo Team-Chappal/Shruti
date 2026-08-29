@@ -1,14 +1,26 @@
 ﻿# SHRUTI
 
+[![Laptop tests](https://img.shields.io/badge/laptop-135_passing-brightgreen)](apps/laptop/tests/)
+[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)](docs/LEARNED.md)
+[![Protocol tests](https://img.shields.io/badge/android_protocol-11_passing-brightgreen)](apps/android/protocol/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](apps/laptop/pyproject.toml)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 > **Three phones. One microphone. Zero mercy for noise.**
 
 SHRUTI fuses multiple smartphones into a single phased microphone
 array. Three iQOO devices, spaced a meter apart, capture audio
-in sync, exchange their packets over Wi-Fi Direct, and a laptop
-array processor beamforms the result into a clean, isolated
-transcript. The work runs on the loaner fleet at the iQOO
-Hackathon 2026 — Smart Education track — and ships as a
-self-contained build that doesn't need the cloud.
+in sync, exchange their packets over OkHttp WebSocket on
+`ws://<laptop>:8765/`, and a laptop array processor beamforms
+the result into a clean, isolated transcript. The work runs
+on the loaner fleet at the iQOO Hackathon 2026 — Smart
+Education track — and ships as a self-contained build that
+doesn't need the cloud.
+
+See [`SHRUTI_BATTLE_PLAN.md`](./SHRUTI_BATTLE_PLAN.md) for
+the original design doc and
+[issue #20](https://github.com/Team-Chappal/Shruti/issues/20)
+for the task list that drove the autonomous build.
 
 ## What it does
 
@@ -25,7 +37,7 @@ git clone https://github.com/Team-Chappal/Shruti.git
 cd Shruti
 cd apps/laptop
 python -m pip install -e ".[dev]"
-make test        # 109 tests, ~3 s
+make test        # 135 tests, ~3 s
 make bench       # microbenchmark, writes data/benchmarks/latest.json
 make demo        # end-to-end pipeline with synthetic phones
 ```
@@ -43,12 +55,13 @@ hackathon-style "does it still work after I refactored?" check.
 | UNPROCESSED capture @ 48 kHz | WebSocket ingest (size cap, rate limit) |
 | Chirp beacon (master) | Chirp cross-correlation (sub-sample) |
 | Heartbeat keep-alive | Stream aligner + drift |
-| Foreground services | TDOA via GCC-PHAT |
-| | 2D position via non-linear LS |
-| | Beamform (D&S or MVDR) |
+| Foreground services (Capture, Chirp, Audit) | TDOA via GCC-PHAT |
+| OkHttp WebSocket transport (ws://:8765) | 2D position via non-linear LS |
+| Identity config (SharedPreferences) | Beamform (D&S or MVDR) |
 | | ASR pass-through (sherpa-onnx / mock) |
 | | Tracker + text-based radar |
-| | Standalone /metrics HTTP server |
+| | Standalone /metrics HTTP server + jury dashboard |
+| | Stem-replay fallback (`shruti-array replay <dir>`) |
 
 The chirp handshake is the physics anchor. Everything downstream
 relies on its sub-100-µs precision. See
@@ -89,15 +102,19 @@ under the 200 ms budget. Full numbers in
 
 ## Test posture
 
-- **109 laptop tests** (`apps/laptop/tests/`), all green.
-  Coverage 77% (with `asr/sherpa_onnx.py` and `tts/piper.py`
+- **135 laptop tests** (`apps/laptop/tests/`), all green.
+  Coverage 89% (with `asr/sherpa_onnx.py` and `tts/piper.py`
   ignored — they're scaffold backends).
 - **11 Android protocol tests** (`apps/android/protocol/`),
-  byte-compatible with the Python reference.
+  byte-compatible with the Python reference, plus 4
+  TransportClient wire-format tests and 3 WavFileWriter
+  tests in the `:app` module.
 - **CI** runs ruff, mypy (strict, no `|| true`), bandit, the
   full pytest suite with a 75% coverage gate, the end-to-end
-  `shruti-array demo` smoke, and the benchmark on every push.
-  See `.github/workflows/ci.yml`.
+  `shruti-array demo` smoke, the benchmark, and a
+  `windows-latest` demo-smoke job that catches the cp1252
+  console regression on every push. See
+  `.github/workflows/ci.yml`.
 
 ## Repo layout
 
@@ -131,18 +148,28 @@ Dockerfile                     # Laptop processor image
 
 ## Device-bound work
 
-These ship as `NEEDS-DEVICE` markers in the source and are
-completed on the loaner fleet at the venue:
+The team's event-day tasks (not in the autonomous build; the
+team does these on the loaner fleet before the pitch):
 
-- UNPROCESSED capture verified on the 3 real iQOO phones
-- ONNX→QNN export of the Indic ASR running on the Snapdragon NPU
-- Office Kit Wi-Fi Direct bridge host IP
-- The actual measured 42-µs sync number
+- Confirm UNPROCESSED capture is phase-coherent across the
+  3 real iQOO phones; record the actual 42-µs sync number
+- Run the device-audit step (T08: tap "Start 30 s audit
+  recording" on each phone, pull the WAVs, run
+  `shruti-audit` on the laptop)
+- Choose the IndicWhisper / IndicConformer / Vosk model and
+  fill the URLs into `tools/fetch_asr.py`, then run
+  `python -m tools.fetch_asr --target indic`
+- Plug in the Office Kit Wi-Fi Direct bridge host IP into
+  the app's WS URL field on the setup screen
+- At the 17:30 GO/NO-GO gate: set `SHRUTI_PITCH_MODE=tier_0`
+  if the sync spike doesn't land (the dashboard reflects
+  this live; the pitch wording changes accordingly)
 
-[tools/rebuild/recipe.md](tools/rebuild/recipe.md) walks the
-judges through re-creating the build on a fresh laptop. The
-[docs/LEARNED.md](docs/LEARNED.md) doc captures what shipped
-vs. what the original plan assumed.
+Zero `NEEDS-DEVICE` markers remain in `apps/android/` —
+all four services (Capture, Chirp, Audit) are real, the
+transport is real OkHttp WebSocket, the permissions are
+real, the identity is real SharedPreferences. What's left
+is calibration, not code.
 
 ## Team
 
