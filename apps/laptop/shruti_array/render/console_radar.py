@@ -43,6 +43,14 @@ if _USE_ANSI:
 else:
     _BOLD = _DIM = _RED = _GREEN = _YELLOW = _BLUE = _CYAN = _RESET = ""
 
+# ASCII fallback glyphs (used when --ascii is set or the stdout codec
+# cannot encode the Unicode glyphs below). The fallback keeps the
+# radar readable on legacy Windows cp1252 consoles and over SSH.
+_GLYPH_DOT = "●"  # U+25CF
+_GLYPH_DOT_ASCII = "o"
+_GLYPH_PLUS = "+"
+_GLYPH_ELEMENT = "E"
+
 
 @dataclass
 class RadarState:
@@ -71,55 +79,96 @@ def _grid_origin() -> tuple[int, int]:
     return (GRID_H // 2 + 1, GRID_W // 2 + 1)
 
 
-def render(state: RadarState) -> str:
+def render(state: RadarState, *, force_ascii: bool = False) -> str:
     """Render the full text radar as a single string. Suitable for
-    log lines and for terminal redraws."""
+    log lines and for terminal redraws.
+
+    `force_ascii=True` swaps the bullet glyph for a plain `o` so the
+    output is renderable on a Windows cp1252 console or any other
+    non-UTF-8 stdout without raising UnicodeEncodeError.
+    """
     out: list[str] = []
     out.append(_BOLD + "SHRUTI radar" + _RESET)
     out.append("-" * GRID_W)
-    out.extend(_render_grid(state.position))
+    out.extend(_render_grid(state.position, force_ascii=force_ascii))
     out.append("-" * GRID_W)
     out.append(_render_stats_line(state))
     out.append(_render_transcript_lines(state.transcript_lines))
     return "\n".join(out)
 
 
-def render_to_terminal(state: RadarState) -> None:
+def _ensure_utf8_stdout() -> None:
+    """Reconfigure stdout to UTF-8 so non-ASCII glyphs don't crash
+    on a Windows cp1252 console (the venue laptop).
+
+    The reconfigure call is wrapped in try/except because some
+    embedded stdouts (e.g. a `TextIOWrapper` over `BytesIO` in
+    tests) report no reconfigure method. We also bail if the
+    encoding is already UTF-8.
+    """
+    try:
+        enc = sys.stdout.encoding
+    except (AttributeError, ValueError):
+        return
+    if not enc or enc.lower() in ("utf-8", "utf8"):
+        return
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is None:
+        return
+    try:
+        reconfigure(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        # If reconfigure fails (e.g. on a captured stream in a test
+        # harness), the safest fallback is to keep going; the
+        # --ascii glyph swap below catches the worst case.
+        pass
+
+
+def render_to_terminal(state: RadarState, *, force_ascii: bool = False) -> None:
     """Render to the current TTY, clearing it first if interactive.
 
     This is what the `run-radar` command calls on every DSP tick.
+    On Windows cp1252 consoles we reconfigure stdout to UTF-8 with
+    `errors='replace'` so the bullet glyph can't crash the demo.
     """
+    if not force_ascii:
+        _ensure_utf8_stdout()
     if sys.stdout.isatty():
         _clear_screen()
-    sys.stdout.write(render(state) + "\n")
+    sys.stdout.write(render(state, force_ascii=force_ascii) + "\n")
     sys.stdout.flush()
 
 
-def _render_grid(position: tuple[float, float] | None) -> list[str]:
+def _render_grid(
+    position: tuple[float, float] | None,
+    *,
+    force_ascii: bool = False,
+) -> list[str]:
     lines: list[str] = [""] * GRID_H
     # Mark the array elements (3-element triangle) at their
     # nominal positions. Default geometry: corners at
     # (-0.3, -0.2), (0.3, -0.2), (0, 0.4) (centroid-centered).
     elements = [(-0.30, -0.20), (0.30, -0.20), (0.0, 0.40)]
+    dot_glyph = _GLYPH_DOT_ASCII if force_ascii else _GLYPH_DOT
     for ex, ey in elements:
         col, row = _world_to_cell(ex, ey)
         if 0 <= row < GRID_H and 0 <= col < GRID_W:
             line = lines[row]
             # Place marker (use E for element).
-            lines[row] = _pad(line, col) + "E"
+            lines[row] = _pad(line, col) + _GLYPH_ELEMENT
     # Speaker dot.
     if position is not None:
         col, row = _world_to_cell(*position)
         if 0 <= row < GRID_H and 0 <= col < GRID_W:
             line = lines[row]
-            lines[row] = _pad(line, col) + _RED + "●" + _RESET
+            lines[row] = _pad(line, col) + _RED + dot_glyph + _RESET
     # Centroid cross-hair.
     crow, ccol = _grid_origin()
     crow -= 1  # 0-based
     ccol -= 1
     if 0 <= crow < GRID_H:
         line = lines[crow]
-        lines[crow] = _pad(line, ccol) + _DIM + "+" + _RESET
+        lines[crow] = _pad(line, ccol) + _DIM + _GLYPH_PLUS + _RESET
     return ["".join(_visualise(line)) for line in lines]
 
 

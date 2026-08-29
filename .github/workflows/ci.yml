@@ -83,6 +83,52 @@ jobs:
           name: laptop-test-report-${{ matrix.python-version }}
           path: apps/laptop/.pytest_cache/
 
+  laptop-windows-smoke:
+    name: Laptop demo smoke on Windows
+    # This is the venue's host OS. Run the same demo smoke
+    # matrix that the Linux job runs, but on windows-latest
+    # with a cp1252 console. Catches the UnicodeEncodeError
+    # regression in `render/console_radar.py`.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/laptop/pyproject.toml
+      - name: Install laptop dependencies
+        working-directory: apps/laptop
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Run the laptop test suite
+        working-directory: apps/laptop
+        run: >-
+          python -m pytest -v --tb=short --maxfail=1
+          --no-cov
+          --ignore=shruti_array/asr/sherpa_onnx.py
+          --ignore=shruti_array/tts/piper.py
+      - name: Run the end-to-end demo on a cp1252 console
+        # `chcp 65001` switches the Windows console code page to
+        # UTF-8 so the radar's bullet glyph renders. The demo
+        # also reconfigures stdout to UTF-8 on first render and
+        # offers --ascii for legacy hosts. The PYTHONIOENCODING
+        # env var is belt-and-braces.
+        shell: cmd
+        working-directory: apps/laptop
+        run: |
+          chcp 65001
+          set PYTHONIOENCODING=utf-8
+          python -m shruti_array.cli demo --seconds 1
+      - name: Run the end-to-end demo with --ascii fallback
+        # The hard fallback path. Even with no env vars, a
+        # default Windows cp1252 console, the radar must render.
+        shell: cmd
+        working-directory: apps/laptop
+        run: python -m shruti_array.cli demo --seconds 1 --ascii
+
   android-protocol-tests:
     name: Android protocol JVM tests
     runs-on: ubuntu-latest

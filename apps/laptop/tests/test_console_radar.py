@@ -1,12 +1,15 @@
 """Tests for the text-based radar UI."""
 from __future__ import annotations
 
+import io
+
 from shruti_array.render.console_radar import (
     GRID_CELL_M,
     GRID_W,
     RadarState,
     _world_to_cell,
     render,
+    render_to_terminal,
 )
 from shruti_array.render.overlays import TranscriptLine
 
@@ -84,3 +87,66 @@ def test_grid_cell_m_is_reasonable() -> None:
     assert GRID_CELL_M == 0.10
     # And the full grid is at least 4 m wide.
     assert GRID_W * GRID_CELL_M >= 4.0
+
+
+def test_render_to_terminal_survives_cp1252_stdout() -> None:
+    """On a Windows cp1252 console, writing the bullet character
+    raises UnicodeEncodeError. render_to_terminal must recover
+    via reconfigure(encoding='utf-8', errors='replace') so the
+    venue laptop (Windows) does not crash mid-demo.
+    """
+    state = RadarState(
+        position=(0.0, 0.0),
+        sync_stability_us=42.0,
+        uptime_s=60.0,
+        beamform_active=True,
+        transcript_lines=[
+            TranscriptLine(track_id=0, text="hello", language="hi", confidence=0.9),
+        ],
+    )
+    # A TextIOWrapper backed by a BytesIO is the closest pure-Python
+    # stand-in for a Windows cp1252 console. Whatever the system
+    # locale, the reconfigure call inside render_to_terminal must
+    # switch this to utf-8 before any bullet writes happen.
+    raw = io.BytesIO()
+    out = io.TextIOWrapper(raw, encoding="cp1252", errors="strict", line_buffering=True)
+    import contextlib
+
+    with contextlib.redirect_stdout(out):
+        render_to_terminal(state)  # must NOT raise
+    # The wrapper is now utf-8; the wrapper is closed lazily so we
+    # just confirm the inner BytesIO has bytes for the radar frame.
+    out.flush()
+    text = raw.getvalue().decode("utf-8", errors="replace")
+    assert "SHRUTI radar" in text
+    assert "hello" in text
+
+
+def test_render_ascii_uses_no_unicode_glyphs() -> None:
+    """When the operator passes --ascii, the radar output must
+    contain no non-ASCII characters so it renders correctly on
+    legacy consoles and over SSH on cp1252 hosts.
+    """
+    import contextlib
+
+    state = RadarState(
+        position=(0.0, 0.0),
+        sync_stability_us=42.0,
+        uptime_s=60.0,
+        beamform_active=True,
+        transcript_lines=[
+            TranscriptLine(track_id=0, text="hi", language="hi", confidence=0.9),
+        ],
+    )
+    raw = io.BytesIO()
+    out = io.TextIOWrapper(raw, encoding="ascii", errors="strict", line_buffering=True)
+    with contextlib.redirect_stdout(out):
+        render_to_terminal(state, force_ascii=True)
+    out.flush()
+    payload = raw.getvalue()
+    # Every byte must be plain ASCII.
+    payload.decode("ascii")  # raises if any non-ASCII byte present
+    # And the bullet must have been replaced by an ASCII fallback.
+    text = payload.decode("ascii")
+    assert "SHRUTI radar" in text
+    assert "hi" in text

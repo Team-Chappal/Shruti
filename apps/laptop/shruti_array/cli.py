@@ -32,6 +32,8 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--hz", type=float, default=2.0, help="Refresh rate")
     t.add_argument("--seconds", type=float, default=0.0,
                    help="Exit after this many seconds; 0 means run until interrupted.")
+    t.add_argument("--ascii", action="store_true",
+                   help="Use ASCII glyphs only (Windows cp1252 console)")
 
     sub.add_parser("synth-corpus", help="Generate a deterministic synthetic corpus.")
 
@@ -48,6 +50,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="Duration in seconds (default 8)")
     demo_p.add_argument("--speed", type=float, default=0.5,
                         help="Target angular speed in rad/s (default 0.5)")
+    demo_p.add_argument("--ascii", action="store_true",
+                        help="Use ASCII glyphs only (Windows cp1252 console)")
 
     h = sub.add_parser("harness", help="Run the regression harness.")
     h.add_argument("--scenes", type=int, default=5)
@@ -101,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
                         ),
                     ],
                 )
-                render_to_terminal(state)
+                render_to_terminal(state, force_ascii=args.ascii)
                 _t.sleep(1.0 / max(args.hz, 0.1))
                 i += 1
         except KeyboardInterrupt:
@@ -112,11 +116,14 @@ def main(argv: list[str] | None = None) -> int:
         return corpus_main(["synth", "--out", "data/corpus/synth"])
     elif args.cmd == "demo":
         from .demo import main as demo_main
-        return demo_main([
+        demo_argv = [
             "--phones", str(args.phones),
             "--seconds", str(args.seconds),
             "--speed", str(args.speed),
-        ])
+        ]
+        if args.ascii:
+            demo_argv.append("--ascii")
+        return demo_main(demo_argv)
     elif args.cmd == "harness":
         from .harness.regression import main as harness_main
         return harness_main([

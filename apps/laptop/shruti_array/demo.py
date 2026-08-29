@@ -34,6 +34,7 @@ async def _run_demo(
     n_phones: int = 3,
     duration_s: float = 8.0,
     target_speed_rps: float = 0.5,  # radians per second of target motion
+    force_ascii: bool = False,
 ) -> None:
     """Drive the pipeline for `duration_s` seconds. End-to-end."""
     cfg = AppConfig.default()
@@ -102,7 +103,7 @@ async def _run_demo(
                     for t in frame.tracks[:3]
                 ],
             )
-            render_to_terminal(state)
+            render_to_terminal(state, force_ascii=force_ascii)
         # Pace to roughly real-time: 1 window every 80 ms.
         await asyncio.sleep(loop.window_n_frames * frame_n_samples / cfg.audio.sample_rate_hz)
 
@@ -120,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="Number of simulated phones (default 3, minimum 2)")
     p.add_argument("--seconds", type=float, default=8.0, help="Duration in seconds (default 8)")
     p.add_argument("--speed", type=float, default=0.5, help="Target angular speed, rad/s (default 0.5)")
+    p.add_argument("--ascii", action="store_true",
+                   help="Use ASCII glyphs only (Windows cp1252 console)")
     args = p.parse_args(argv)
     if args.phones < 2:
         # We need at least 2 channels for GCC-PHAT to produce a
@@ -131,6 +134,7 @@ def main(argv: list[str] | None = None) -> int:
             n_phones=args.phones,
             duration_s=args.seconds,
             target_speed_rps=args.speed,
+            force_ascii=args.ascii,
         ))
     except KeyboardInterrupt:
         return 0

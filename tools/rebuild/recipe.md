@@ -40,7 +40,11 @@ a dirty tree — that's intentional.
 ```sh
 cd apps/laptop
 python -m pip install -e ".[dev,ui]"
-make test-fast     # ~2 seconds, no audio device needed
+# On Windows: ensure the console can render the radar's bullet
+# glyph. Setting PYTHONUTF8=1 is belt-and-braces; the demo also
+# reconfigures stdout to UTF-8 on first render and offers --ascii
+# as a hard fallback for legacy cp1252 consoles.
+PYTHONUTF8=1 make test-fast     # ~2 seconds, no audio device needed
 ```
 
 The test suite has 39 tests and exercises the protocol packetizer
