@@ -37,19 +37,23 @@ python tools/record_corpus.py \
 ```
 
 This creates the directory and `meta.json`. Now start the capture
-on each phone:
+on each phone. The app's audit mode (T08) writes WAVs to the app's
+external files dir, which on Android maps to:
+
+    /sdcard/Android/data/dev.shruti/files/audit/<phone_id>_<ts>.wav
 
 ```sh
-# On each phone, via adb:
+# On each phone, via adb, start an audit-mode capture:
 adb -s <phone> shell am start -n dev.shruti/.capture.CaptureService \
-    --es output_dir /sdcard/shruti/captures/<phone_id>/
+    --es mode audit \
+    --es output_dir /sdcard/Android/data/dev.shruti/files/audit/
 ```
 
 Run the scene for the configured duration. Stop the service. Pull
 the WAVs:
 
 ```sh
-adb -s <phone> pull /sdcard/shruti/captures/<phone_id>/ \
+adb -s <phone> pull /sdcard/Android/data/dev.shruti/files/audit/ \
     data/corpus/recorded/2026-08-28_classroom/
 ```
 

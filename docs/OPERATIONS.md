@@ -97,15 +97,19 @@ shruti-array run-radar
 
 ## Switching to the fallback ladder
 
-The fallback ladder (live stream -> batch file -> red-light) is
+The fallback ladder (live stream -> batch file -> stem replay) is
 driven manually. The triggers are described in
 `tools/rebuild/recipe.md` step 6.
 
 To pull WAV files from a phone over `adb` (batch rung):
 
 ```sh
-adb -s <phone> pull /sdcard/shruti/captures/ data/corpus/recorded/<scene>/
+adb -s <phone> pull /sdcard/Android/data/dev.shruti/files/audit/ \
+    data/corpus/recorded/<scene>/
 ```
+
+(The audit-mode WAVs the app writes to its external files dir
+also live under `/sdcard/Android/data/dev.shruti/files/audit/`.)
 
 To run the batch mode against a directory:
 
@@ -118,6 +122,14 @@ python -m shruti_array.fallback ingest \
     --corpus data/corpus/recorded/<scene>/ \
     --out /tmp/beamformed.wav \
     --beamform mvdr
+```
+
+To run the stem-replay rung (laptop-closed recovery):
+
+```sh
+shruti-array replay data/stems/example/ --seconds 8
+# Renders the same radar + beamformed output that the live
+# pipeline produces, from a pre-recorded multichannel stem.
 ```
 
 The CLI accepts two filename conventions: `<phone_id>_<...>.wav`

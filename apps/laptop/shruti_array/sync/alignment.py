@@ -98,6 +98,20 @@ class StreamAligner:
     def all_phone_ids(self) -> list[int]:
         return list(self._streams.keys())
 
+    def unregister(self, phone_id: int) -> bool:
+        """Drop a phone from the aligner. Returns True if the
+        phone was registered, False otherwise.
+
+        T11: when a phone disconnects mid-demo, the operator
+        (or the server's disconnect handler) calls this so
+        `DspLoop.step()` stops trying to read from its buffer
+        and the array gracefully degrades to the surviving
+        elements. The next `all_phone_ids()` reflects the new
+        membership, so geometry subsetting in the beamformer
+        follows the live count, not the original 3.
+        """
+        return self._streams.pop(phone_id, None) is not None
+
     def __contains__(self, phone_id: int) -> bool:
         return phone_id in self._streams
 

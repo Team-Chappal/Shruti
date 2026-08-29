@@ -32,7 +32,7 @@ git pull --rebase
 
 If `git status` is dirty at the end of an event day, stop, commit
 what you have with a `wip:` prefix, and rebase tomorrow. The
-`tools/rebuild/dirty-check.sh` script refuses to start a rebuild on
+`tools/rebuild/dirty-check.py` script refuses to start a rebuild on
 a dirty tree — that's intentional.
 
 ## 2. Laptop environment (3 min)
@@ -40,16 +40,21 @@ a dirty tree — that's intentional.
 ```sh
 cd apps/laptop
 python -m pip install -e ".[dev,ui]"
-make test-fast     # ~2 seconds, no audio device needed
+# On Windows: ensure the console can render the radar's bullet
+# glyph. Setting PYTHONUTF8=1 is belt-and-braces; the demo also
+# reconfigures stdout to UTF-8 on first render and offers --ascii
+# as a hard fallback for legacy cp1252 consoles.
+PYTHONUTF8=1 make test-fast
 ```
 
-The test suite has 39 tests and exercises the protocol packetizer
-(including its CRC-32C self-test against the iSCSI test vector),
-the chirp generator, the cross-correlation-based offset estimation,
-GCC-PHAT, the delay-and-sum and MVDR beamformers, the regression
-harness, the device-audit analyzer, the ASR/TTS interfaces, and the
-stream aligner. **All 39 must pass before continuing.** If any test
-is flaky, that's a bug — the harness is the contract.
+The test suite runs the protocol packetizer (including its CRC-32C
+self-test against the iSCSI test vector), the chirp generator, the
+cross-correlation-based offset estimation, GCC-PHAT, the
+delay-and-sum and MVDR beamformers, the regression harness, the
+device-audit analyzer, the ASR/TTS interfaces, and the stream
+aligner. **All tests must pass before continuing.** If any test
+is flaky, that's a bug — the harness is the contract. Run
+`make test` for the full run with coverage; the CI gate is 75%.
 
 ```sh
 make synth
@@ -65,10 +70,14 @@ collapses.
 ```sh
 mkdir -p data/captures
 # On each phone, run the audit capture:
-#   1. Open the app, start a session, hold the phone face-up on the
-#      bench for 30 s of silence.
-#   2. Pull the per-phone WAV files from /Android/data/dev.shruti/
-#      into data/captures/<phone_id>_*.wav.
+#   1. Open the app, switch to "Audit mode", tap Record.
+#   2. Hold the phone face-up on the bench for 30 s of silence.
+#   3. Tap Share / Done — the WAV lands in the app's external
+#      files dir, which on Android maps to:
+#         /sdcard/Android/data/dev.shruti/files/audit/<phone_id>_<ts>.wav
+#   4. Pull the per-phone WAVs:
+adb -s <phone> pull /sdcard/Android/data/dev.shruti/files/audit/ \
+    data/captures/<phone_id>/
 shruti-audit
 cat data/audit/report.json | jq '.[] | {phone: .phone_id, rms: .rms_dbfs, noise: .noise_floor_dbfs, sr: .sample_rate_hz}'
 ```
@@ -126,8 +135,12 @@ Only after the spine is solid:
 - Radar: confirm a teammate walking a short arc is tracked.
 - Fallback ladder: kill a phone mid-capture. Confirm the array
   keeps going with the remaining elements.
-- Red-light mode: close the laptop. Confirm the phone-only
-  beamformer still produces a usable signal.
+- Stem-replay rung (the laptop-closed recovery): run
+  `shruti-array replay data/stems/example/` and confirm the
+  radar + beamformed output render from a pre-recorded
+  multichannel stem. This is the post-T13 reality of the
+  "red light" rung: no on-phone beamformer, but the laptop
+  can still demo from a stem when the live transport is gone.
 
 ## 7. Commit the recipe (1 min)
 

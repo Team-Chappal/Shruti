@@ -142,6 +142,16 @@ class DspLoop:
         if self._buffers[phone_id].size > max_samples:
             self._buffers[phone_id] = self._buffers[phone_id][-max_samples:]
 
+    def drop_phone(self, phone_id: int) -> None:
+        """T11: drop a phone from the loop. Clears its per-phone
+        buffer and unregisters it from the aligner so subsequent
+        `step()` calls operate on the surviving elements only.
+        Idempotent: safe to call for a phone that was never
+        registered, or one that's already been dropped.
+        """
+        self._buffers.pop(phone_id, None)
+        self.aligner.unregister(phone_id)
+
     def window_n_samples(self) -> int:
         # The protocol frame is hardcoded at 960 samples (20 ms @
         # 48 kHz) on both the Kotlin and Python sides. If the team

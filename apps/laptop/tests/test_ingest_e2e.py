@@ -53,8 +53,10 @@ def _free_port() -> int:
 
 
 @asynccontextmanager
-async def _running_server() -> AsyncIterator[PacketServer]:
-    """Start a PacketServer on a free port for the duration of one test."""
+async def _running_server() -> AsyncIterator[tuple[PacketServer, ServerConfig]]:
+    """Start a PacketServer on a free port for the duration of one test.
+    Yields the server and its config so tests can construct the WS URL.
+    """
     cfg = ServerConfig(host="127.0.0.1", port=_free_port())
     server = PacketServer(cfg)
     task = asyncio.create_task(server.start())
@@ -63,7 +65,7 @@ async def _running_server() -> AsyncIterator[PacketServer]:
     # in their own tests.
     await asyncio.sleep(0.1)
     try:
-        yield server
+        yield server, cfg
     finally:
         task.cancel()
         try:
@@ -90,21 +92,22 @@ def _audio_packet(phone_id: int, sequence: int, n_samples: int = 480) -> bytes:
 async def test_single_phone_round_trip_registers_and_increments() -> None:
     """One client sends N packets, server should report 1 phone and
     the received counter should climb by N."""
-    async with _running_server() as server:
-        cfg = server.config
+    async with _running_server() as (server, cfg):
         url = f"ws://{cfg.host}:{cfg.port}"
         before = GLOBAL.snapshot()["counters"].get(
             "shruti_packets_received_total", 0.0
         )
+        server_state: dict[str, list[int]] = {"snapshot": []}
         async with websockets.connect(url) as ws:
             for seq in range(5):
                 await ws.send(_audio_packet(phone_id=0, sequence=seq))
             # Give the server a moment to drain the asyncio queue.
             await asyncio.sleep(0.1)
+            server_state["snapshot"] = list(server.all_phone_ids())
         after = GLOBAL.snapshot()["counters"].get(
             "shruti_packets_received_total", 0.0
         )
-        assert server.all_phone_ids() == [0]
+        assert server_state["snapshot"] == [0]
         assert after - before == 5.0
 
 
@@ -112,31 +115,44 @@ async def test_single_phone_round_trip_registers_and_increments() -> None:
 async def test_three_phones_each_registered_separately() -> None:
     """The 3-phone Tier-1 pitch mode. Three concurrent connections
     from three phone_ids must each end up as a distinct entry in
-    _connections, and each must have the right sample_rate recorded."""
-    async with _running_server() as server:
-        cfg = server.config
+    _connections, and each must have the right sample_rate recorded.
+
+    T11 changed the test mechanics: the server's disconnect
+    handler now removes a phone from _connections when its
+    WebSocket closes, so we have to snapshot the server's view
+    *while* all three connections are still alive rather than
+    after the `async with` contexts have exited.
+    """
+    async with _running_server() as (server, cfg):
         url = f"ws://{cfg.host}:{cfg.port}"
+
+        server_state: dict[str, list[int]] = {"snapshot": []}
 
         async def client(phone_id: int) -> None:
             async with websockets.connect(url) as ws:
                 await ws.send(_audio_packet(phone_id=phone_id, sequence=0))
                 await ws.send(_audio_packet(phone_id=phone_id, sequence=1))
+                # Give the server a moment to drain the asyncio queue.
+                await asyncio.sleep(0.1)
+                # Snapshot the server's view while the connection
+                # is still alive. T11's disconnect handler will
+                # remove us on context exit.
+                server_state["snapshot"] = sorted(server.all_phone_ids())
 
         await asyncio.gather(client(0), client(1), client(2))
-        await asyncio.sleep(0.2)
-        assert sorted(server.all_phone_ids()) == [0, 1, 2]
+        assert server_state["snapshot"] == [0, 1, 2]
 
 
 @pytest.mark.asyncio
 async def test_corrupt_packet_does_not_register_phone() -> None:
     """A bad packet must be CRC-rejected, not crash the connection
     and not register a phantom phone."""
-    async with _running_server() as server:
-        cfg = server.config
+    async with _running_server() as (server, cfg):
         url = f"ws://{cfg.host}:{cfg.port}"
         before = GLOBAL.snapshot()["counters"].get(
             "shruti_crc_failures_total", 0.0
         )
+        server_state: dict[str, list[int]] = {"snapshot_after": []}
         async with websockets.connect(url) as ws:
             # Build a valid packet, then flip a payload byte.
             pkt = bytearray(_audio_packet(phone_id=0, sequence=0))
@@ -147,12 +163,15 @@ async def test_corrupt_packet_does_not_register_phone() -> None:
             # server should still accept it (corrupt-then-recover).
             await ws.send(_audio_packet(phone_id=0, sequence=1))
             await asyncio.sleep(0.1)
+            server_state["snapshot_after"] = list(server.all_phone_ids())
         after = GLOBAL.snapshot()["counters"].get(
             "shruti_crc_failures_total", 0.0
         )
         assert after - before == 1.0
-        # The valid follow-up packet DID register the phone.
-        assert server.all_phone_ids() == [0]
+        # The valid follow-up packet DID register the phone (T11's
+        # disconnect handler hasn't fired yet because the WS is
+        # still open inside this block).
+        assert server_state["snapshot_after"] == [0]
 
 
 @pytest.mark.asyncio
@@ -160,8 +179,7 @@ async def test_oversized_websocket_frame_is_dropped_silently() -> None:
     """The websockets lib caps incoming frames at MAX_PACKET_BYTES.
     A 4 MB frame should close the connection without crashing the
     server, and the server should still accept new connections."""
-    async with _running_server() as server:
-        cfg = server.config
+    async with _running_server() as (server, cfg):
         url = f"ws://{cfg.host}:{cfg.port}"
         # Try the too-large send. The websockets client will close on
         # its side; we don't care about the exact failure mode, only
@@ -180,7 +198,9 @@ async def test_oversized_websocket_frame_is_dropped_silently() -> None:
             pass
         await asyncio.sleep(0.2)
         # The server should still be reachable.
+        server_state: dict[str, list[int]] = {"snapshot": []}
         async with websockets.connect(url) as ws2:
             await ws2.send(_audio_packet(phone_id=9, sequence=0))
             await asyncio.sleep(0.1)
-        assert 9 in server.all_phone_ids()
+            server_state["snapshot"] = list(server.all_phone_ids())
+        assert 9 in server_state["snapshot"]
