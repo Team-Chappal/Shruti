@@ -119,18 +119,44 @@ class PacketServer:
 
     async def _handle_connection(self, ws) -> None:
         remote = ws.remote_address
+        # T11: track the phone_id we eventually learn for this
+        # connection, so a clean close (or abnormal drop) can
+        # remove the PhoneConnection from _connections and
+        # the active_phones gauge.
+        registered_phone_id: list[int] = []
         try:
             async for raw in ws:
-                await self._on_packet(remote, raw, on_connect=None)
+                await self._on_packet(
+                    remote, raw, on_connect=None, on_register=registered_phone_id.append,
+                )
         except Exception as e:  # noqa: BLE001
             log.warning("connection from %s closed: %s", remote, e)
+        finally:
+            if registered_phone_id:
+                # T11: if a phone drops mid-demo, prune its
+                # PhoneConnection so DspLoop.step() no longer
+                # tries to read from an empty buffer and the
+                # active_phones gauge reflects the new count.
+                # The last registered phone_id is the canonical
+                # one; if a client reconnected with a different
+                # phone_id (shouldn't happen but defensive), only
+                # the latest is unregistered.
+                pid = registered_phone_id[-1]
+                async with self._lock:
+                    if pid in self._connections:
+                        del self._connections[pid]
+                        METRICS.set_gauge(ACTIVE_PHONES, len(self._connections))
+                        log.info("phone %d disconnected; active=%d", pid, len(self._connections))
 
     async def _on_packet(
         self,
         remote: tuple[str, int],
         raw: bytes,
         on_connect: ConnectionHandler | None,
-    ) -> None:
+        on_register: Callable[[int], None] | None = None,
+    ) -> int:
+        """Process one packet. Returns the phone_id this packet
+        belongs to (useful for the disconnect tracker)."""
         METRICS.inc(PACKETS_RECEIVED)
         METRICS.inc(BYTES_RECEIVED, len(raw))
 
@@ -139,7 +165,7 @@ class PacketServer:
         if len(raw) > MAX_PACKET_BYTES or len(raw) < HEADER_SIZE + CRC_SIZE:
             METRICS.inc(PACKETS_REJECTED)
             log.warning("packet from %s rejected: bad size %d", remote, len(raw))
-            return
+            return -1
 
         try:
             header = verify_packet(raw)
@@ -147,7 +173,7 @@ class PacketServer:
             METRICS.inc(PACKETS_REJECTED)
             METRICS.inc(CRC_FAILURES)
             log.warning("malformed packet from %s: %s", remote, e)
-            return
+            return -1
 
         phone_id = header.phone_id
         now = time.time()
@@ -163,16 +189,18 @@ class PacketServer:
                 )
                 self._connections[phone_id] = conn
                 METRICS.set_gauge(ACTIVE_PHONES, len(self._connections))
+                if on_register is not None:
+                    on_register(phone_id)
                 if on_connect is not None:
                     asyncio.create_task(on_connect(conn))
             conn.note_packet(now)
             if conn.over_rate_limit():
                 METRICS.inc(PACKETS_REJECTED)
                 log.warning("phone %d over rate limit; dropping packet", phone_id)
-                return
+                return phone_id
             if header.sequence <= conn.sequence:
                 # Duplicate or out-of-order; drop silently.
-                return
+                return phone_id
             if header.sequence != conn.sequence + 1:
                 gap = max(0, header.sequence - conn.sequence - 1)
                 conn.dropped_frames += gap
@@ -190,6 +218,7 @@ class PacketServer:
                 conn.queue.put_nowait(raw)
             except asyncio.QueueFull:
                 pass  # give up; this should be rare
+        return phone_id
 
     def get_connection(self, phone_id: int) -> PhoneConnection | None:
         return self._connections.get(phone_id)

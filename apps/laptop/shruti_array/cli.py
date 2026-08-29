@@ -61,6 +61,22 @@ def main(argv: list[str] | None = None) -> int:
     # positive value (e.g. 3.0) for the recorded-corpus event gate.
     h.add_argument("--require-mvdr-gain-db", type=float, default=-3.0)
 
+    r = sub.add_parser(
+        "replay",
+        help="Replay a directory of pre-recorded multichannel "
+        "stems through the live DSP pipeline. The third rung of "
+        "the fallback ladder; no phones required. Renders the "
+        "same text radar as `demo`.",
+    )
+    r.add_argument("directory", type=str,
+                   help="Directory of per-phone WAV stems")
+    r.add_argument("--seconds", type=float, default=8.0,
+                   help="Duration in seconds (default 8)")
+    r.add_argument("--speed", type=float, default=0.5,
+                   help="Synthetic target angular speed in rad/s (default 0.5)")
+    r.add_argument("--ascii", action="store_true",
+                   help="Use ASCII glyphs only (Windows cp1252 console)")
+
     a = sub.add_parser("audit", help="Analyze a directory of phone captures.")
     a.add_argument("--captures", type=str, default="data/captures")
     a.add_argument("--out", type=str, default="data/audit/report.json")
@@ -132,6 +148,16 @@ def main(argv: list[str] | None = None) -> int:
             "--out", args.out,
             "--require-mvdr-gain-db", str(args.require_mvdr_gain_db),
         ])
+    elif args.cmd == "replay":
+        from .replay import main as replay_main
+        replay_argv = [
+            args.directory,
+            "--seconds", str(args.seconds),
+            "--speed", str(args.speed),
+        ]
+        if args.ascii:
+            replay_argv.append("--ascii")
+        return replay_main(replay_argv)
     elif args.cmd == "audit":
         from .tools.audit import main as audit_main
         return audit_main(["--captures", args.captures, "--out", args.out])
