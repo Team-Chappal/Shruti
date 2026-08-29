@@ -88,6 +88,13 @@ object TransportClient {
             Log.w(TAG, "send() called before start(); dropping ${packet.size}-byte packet")
             return
         }
+        // Push into the local queue. The outbound sender thread
+        // (started by `start(context)`) drains the queue and ships
+        // to the laptop when the laptop is reachable directly. The
+        // inbound WebSocket server (T19) drains the same queue
+        // and ships to any laptop that has dialled in to the phone.
+        // Two consumers, one source: the same packet is delivered
+        // to whichever sink is configured.
         if (!queue.offer(packet)) {
             // Queue full. Drop the oldest to keep the newest
             // audio (T05). This is the only correct way to
@@ -98,6 +105,14 @@ object TransportClient {
             if (!queue.offer(packet)) {
                 droppedCount.incrementAndGet()
             }
+        }
+        // Broadcast to inbound connections. This is fire-and-forget
+        // (no await, no error propagation); if the inbound server
+        // is not running, this is a no-op.
+        try {
+            InboundWebSocketServer.broadcast(packet)
+        } catch (e: Throwable) {
+            Log.w(TAG, "send: inbound broadcast failed: ${e.message}")
         }
     }
 

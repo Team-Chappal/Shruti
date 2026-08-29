@@ -79,6 +79,17 @@ dependencies {
     // same wire format it always has, just over a WebSocket
     // envelope instead of a raw TCP socket.
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // T19 inbound WebSocket server (phone-as-server). The laptop
+    // dials the phone directly when the Wi-Fi AP has client
+    // isolation enabled (Android phone hotspots, which is the
+    // common case in the field). Implemented in
+    // [dev.shruti.transport.InboundWebSocketServer] using only
+    // java.net.ServerSocket and the RFC 6455 handshake — a
+    // previous attempt with org.java-websocket:Java-WebSocket
+    // 1.6.0 bound the socket but the accept() loop silently
+    // failed with EPERM on Android 16 (realme + Nothing A059),
+    // so we dropped the dependency and wrote the accept loop
+    // ourselves. No third-party deps on the inbound side.
     testImplementation("junit:junit:4.13.2")
     // OkHttp's MockWebServer spins up a real local HTTP server
     // in tests so we can assert byte-exact WS frame delivery
