@@ -63,11 +63,11 @@ class MetricsHTTPServer:
     # trust-model rationale.
     def __init__(
         self,
-        host: str = "0.0.0.0",
+        host: str = "0.0.0.0",  # nosec B104 — intentional, see ServerConfig
         port: int = 8766,
         packet_server: PacketServer | None = None,
         boot_file: Path | None = None,
-    ) -> None:  # nosec B104
+    ) -> None:
         self.host = host
         self.port = port
         self.packet_server = packet_server

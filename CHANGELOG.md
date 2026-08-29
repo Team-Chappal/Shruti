@@ -4,6 +4,49 @@ All notable changes to this project are documented here. The
 format follows [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] — 2026-08-29
+
+T15 ships: a per-frame beamformed-WAV recorder for the demo's
+"toggle moment" asset. No behaviour change for the default
+`shruti-array demo` invocation. Total laptop tests: 219 → 229.
+
+This is the build for the iQOO City Battles 2026 event
+(Bengaluru, Aug 29–30). The version is plain `0.3.0` per
+PEP 440; the event linkage lives in `git tag v0.3.0-event`
+and in this changelog entry.
+
+### Added
+- **`shruti_array.recorder.LoopRecorder` + `shruti-array demo --record-toggle DIR` (T15).**
+  New recorder module collects one `LoopFrame` per `DspLoop.step()`
+  and, on `finalise()`, writes one PCM16 mono WAV per phone plus
+  one `<run_id>_beamformed.wav` to the user-supplied directory.
+  Filenames use a local-time `toggle-YYYYMMDD-HHMMSS` prefix so
+  successive runs don't collide. The CLI flag is opt-in: the
+  default demo writes no files. The recorder is tolerant of
+  frames whose channel set doesn't match the phone-id set (a
+  phone that joins after recording starts is gracefully handled
+  — only the channels for known phones are written). `finalise()`
+  is idempotent so a `KeyboardInterrupt` followed by a clean
+  exit still produces one file set. 9 new tests in
+  `tests/test_recorder.py` cover: file layout, mono+PCM16+48 kHz
+  header validity, multi-frame concatenation, out-of-range float
+  clipping, idempotence, unknown-phone tolerance, post-finalise
+  rejection, the `--record-toggle` CLI end-to-end, and the
+  no-flag-no-files default contract. 1 new test in
+  `tests/test_demo_main.py` covers the `--record-toggle` kwarg
+  forwarding through `demo.main()`.
+
+### Changed
+- `shruti_array.dsp_loop` and `shruti_array.demo`: `DspLoop` is
+  unchanged. `_run_demo` now accepts an optional `record_dir`
+  `Path`; when set, the loop hands each `LoopFrame` to a
+  `LoopRecorder` and `finalise()` runs in a `finally` block.
+- Version bumped to `0.3.0` (from `0.2.0`). The event linkage
+  is in `git tag v0.3.0-event` and the CHANGELOG entry header;
+  we don't use a `-event` PEP 440 suffix because `pip install
+  -e .` rejects it. Semver-wise this is a minor bump (new
+  public CLI flag, no breaking API changes).
+
 ## [0.2.0] — 2026-08-29
 
 The autonomous build driven by [issue #20](https://github.com/Team-Chappal/Shruti/issues/20). Every P0 and P1 task from the issue landed; the P2/P3 polish tasks are mostly done too. Total laptop tests: 109 → 135. Coverage 77% → 89%. Zero `NEEDS-DEVICE` markers remain in `apps/android/`.

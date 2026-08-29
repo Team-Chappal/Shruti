@@ -52,6 +52,11 @@ def main(argv: list[str] | None = None) -> int:
                         help="Target angular speed in rad/s (default 0.5)")
     demo_p.add_argument("--ascii", action="store_true",
                         help="Use ASCII glyphs only (Windows cp1252 console)")
+    demo_p.add_argument(
+        "--record-toggle", type=str, default=None, metavar="DIR",
+        help="T15: write per-phone + beamformed WAVs to DIR for the "
+        "duration of the demo. The toggle-moment capture asset.",
+    )
 
     h = sub.add_parser("harness", help="Run the regression harness.")
     h.add_argument("--scenes", type=int, default=5)
@@ -139,6 +144,8 @@ def main(argv: list[str] | None = None) -> int:
         ]
         if args.ascii:
             demo_argv.append("--ascii")
+        if args.record_toggle:
+            demo_argv.extend(["--record-toggle", args.record_toggle])
         return demo_main(demo_argv)
     elif args.cmd == "harness":
         from .harness.regression import main as harness_main

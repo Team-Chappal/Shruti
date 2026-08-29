@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shruti-array"
-version = "0.2.0"
+version = "0.3.0"
 description = "SHRUTI laptop array processor: sync, TDOA, beamforming, ASR, regression harness"
 requires-python = ">=3.10"
 dependencies = [

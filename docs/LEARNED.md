@@ -116,8 +116,11 @@ three iQOO devices in hand:
   recorded-corpus event gate.
 - A Compose canvas radar so the master phone shows the
   radar + transcript (currently text-only on the laptop).
-- A per-frame beamformed-WAV recorder for the live
-  recording-the-toggle-moment asset.
+- ~~A per-frame beamformed-WAV recorder for the live
+  recording-the-toggle-moment asset.~~ Shipped as T15
+  (`shruti-array demo --record-toggle DIR`, see
+  `shruti_array.recorder`). The toggle-moment asset is
+  one CLI flag away.
 - Wire-format versioning so the on-device fleet can be
   upgraded past protocol v1 without re-flashing.
 - A ble/auracast transport fallback if Wi-Fi Direct
