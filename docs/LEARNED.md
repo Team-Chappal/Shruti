@@ -17,6 +17,7 @@ the team should expect on event day.
 | Office Kit as transport           | The transport layer is real WebSocket over plain TCP. Office Kit is the on-site iQOO wrapper that the team plugs in. |
 | TCP transport (port 9870)         | Replaced with OkHttp WebSocket on port 8765 (Android + laptop). The wire format is byte-identical, only the transport wrapper changed. |
 | "Red-light / phone-only" recovery | Renamed to "stem replay" and re-implemented as `shruti-array replay <dir>`. We do not ship an on-phone beamformer; the laptop-closed recovery plays a pre-recorded multichannel stem through the same pipeline. |
+| Mock ASR only | Real sherpa-onnx engine wired (T06). `AsrConfig.engine = "mock" \| "sherpa"`, default `mock`. The `sherpa` engine resamples 48 kHz laptop audio to 16 kHz via `scipy.signal.resample_poly` and uses the lazy `OfflineRecognizer`. `python -m tools.fetch_asr --target tiny` downloads a working 40 MB English model; the IndicWhisper/IndicConformer URLs are placeholders for the team to fill in. CI must not need a 300 MB model, so the default is the mock. |
 
 ## What the plan didn't say, that we did anyway
 
