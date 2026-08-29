@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security policy for SHRUTI.
+
+  The default Android security policy (since API 28) blocks
+  cleartext HTTP / WS traffic. SHRUTI's WebSocket transport
+  to the laptop is ws:// (not wss://), so we need an explicit
+  allowlist for the local-network ranges the laptop might
+  be on.
+
+  Why these specific IPs / ranges:
+    192.168.49.1     Wi-Fi Direct group-owner default
+                     (matches IdentityConfig.DEFAULT_LAPTOP_WS_URL)
+    10.0.0.0/8       Common office / home Wi-Fi (the laptop
+                     on a typical home router)
+    172.16.0.0/12    Common office Wi-Fi
+    127.0.0.1        Loopback, for emulator-style testing
+    ::1              IPv6 loopback
+
+  This is intentionally restricted to RFC1918 + loopback so we
+  don't accidentally permit cleartext to the public internet.
+  The production path is to use wss:// on a Tailscale-style
+  overlay; for the hackathon demo, cleartext on the local
+  network is the right call.
+
+  The <base-config cleartextTrafficPermitted="false"> is the
+  default for everything else — production hosts, telemetry,
+  any future HTTPS endpoints.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.0.0</domain>
+        <domain includeSubdomains="false">10.158.110.150</domain>
+        <domain includeSubdomains="false">172.16.0.0</domain>
+        <domain includeSubdomains="false">192.168.49.1</domain>
+        <domain includeSubdomains="false">::1</domain>
+    </domain-config>
+</network-security-config>
