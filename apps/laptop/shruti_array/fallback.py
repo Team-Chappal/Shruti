@@ -4,8 +4,12 @@ The three rungs, in order of preference:
   1. Live streaming over Wi-Fi Direct (the normal path).
   2. Batch file sync: each phone writes WAVs locally, the laptop
      pulls them when reachable, processes the most recent N seconds.
-  3. Red-light mode: phone-only, 2-phone local beamforming with
-     the laptop closed.
+  3. Stem replay: the laptop-closed / "red light" recovery rung.
+     A pre-recorded multichannel WAV stem is played through the
+     pipeline so the demo can keep showing the radar + beamformed
+     output when the live transport is gone. There is no on-phone
+     beamformer; this rung ships as `shruti-array replay <dir>`
+     (see `shruti_array.replay`).
 
 This module owns the laptop-side "am I in fallback mode?" logic and
 the batch-file ingest path. The phone-side "write WAV when Wi-Fi
@@ -35,7 +39,12 @@ class LadderRung:
 # Order matters: the engine starts at the top and falls down on failure.
 RUNG_LIVE_STREAM = LadderRung("live_stream", "WebSocket streaming over Wi-Fi Direct.")
 RUNG_BATCH_FILE = LadderRung("batch_file", "WAV files pulled from each phone on demand.")
-RUNG_RED_LIGHT = LadderRung("red_light", "Phone-only, 2-phone local beamformer.")
+RUNG_STEM_REPLAY = LadderRung(
+    "stem_replay",
+    "Laptop-closed recovery: pre-recorded multichannel stem played through the pipeline. "
+    "No on-phone beamformer; this rung exists so the demo can keep showing the radar + "
+    "beamformed output when the live transport is gone.",
+)
 
 
 def next_rung(current: LadderRung) -> LadderRung:
@@ -44,8 +53,16 @@ def next_rung(current: LadderRung) -> LadderRung:
     if current is RUNG_LIVE_STREAM:
         return RUNG_BATCH_FILE
     if current is RUNG_BATCH_FILE:
-        return RUNG_RED_LIGHT
-    return RUNG_RED_LIGHT
+        return RUNG_STEM_REPLAY
+    return RUNG_STEM_REPLAY
+
+
+# Back-compat alias. The pre-T13 release called this rung "red_light"
+# and described it as "phone-only, 2-phone local beamformer". Neither
+# of those is true — we do not ship an on-phone beamformer — so the
+# rung was renamed. Any code or doc that still references the old
+# name will get the same LadderRung object.
+RUNG_RED_LIGHT = RUNG_STEM_REPLAY
 
 
 def read_wav(path: Path) -> tuple[int, NDArray[np.float32]]:

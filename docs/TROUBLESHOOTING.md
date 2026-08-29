@@ -7,8 +7,9 @@ the metrics endpoint; if you can `curl` it, start there.
 
 - Are the phones on the same Wi-Fi Direct group as the laptop?
   The Office Kit bridge handles this; check the bridge status.
-- Is the TCP connection open? `netstat -an | grep 9870` on the
-  laptop, or check `TransportClient` logs on the phone.
+- Is the WebSocket connection open? `netstat -an | grep 8765` on
+  the laptop, or check the phone app's status bar (it shows the
+  WebSocket connection state).
 - Is the laptop firewall blocking port 8765? `sudo ufw allow
   8765/tcp` on Linux; Windows Firewall allow inbound on 8765.
 

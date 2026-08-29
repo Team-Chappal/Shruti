@@ -11,7 +11,7 @@ How might we give any classroom, press scrum, or crowded hall a studio-grade dir
 | **0 — Sync spike** | 1–2 | Go/no-go on the physics: chirp offset stability <100µs on personal phones; UNPROCESSED phase/latency characterization per unit; chirp-in-noise margin |
 | **1 — Two-phone spine** | 3–5 | End-to-end floor: capture → Wi-Fi Direct → laptop → aligned frames → TDOA radar dot → RAW⟷BEAMFORMED toggle. **Noisy-room corpus recorded + regression harness** |
 | **2 — Core deep** | 6–9 | MVDR upgrade, drift compensation, phone-3 admission, NPU Indic ASR (ONNX/QNN), vernacular TTS. **Rebuild recipe written alongside each milestone** (scripts, checklists, commit ritual) |
-| **3 — Breadth** | 10–12 | Per-speaker transcript streams, red-light phone-only mode, robustness matrix, rubric-artifact audit |
+| **3 — Breadth** | 10–12 | Per-speaker transcript streams, stem-replay (laptop-closed recovery), robustness matrix, rubric-artifact audit |
 | **4 — Dress rehearsal** | 13–14 | Full demo runs twice; **hedge executes**: rehearsed on-site rebuild run *or* polish + pitch video, per compliance verdict |
 
 ## Key Assumptions to Validate

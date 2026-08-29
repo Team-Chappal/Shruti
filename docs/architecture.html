@@ -233,13 +233,16 @@
       Each rung degrades gracefully; the demo never blanks. Trigger order:
     </p>
     <pre class="diagram">  <span class="accent">3-phone live beamform</span>   →   2-phone array   →   single-phone enhance (NS+AGC-off)
-  Wi-Fi Direct stream  →   chunked file sync (batch reprocess)  →   on-phone-only mode
+  WebSocket stream      →   chunked file sync (batch reprocess)  →   stem replay (laptop-closed)
+  (Wi-Fi Direct)        →                                                  (replays a pre-recorded multichannel stem)
   Ultrasonic sync     →   cable-ping calibration               →   pre-timestamped exchange</pre>
     <p style="margin:14px 0 0; color:var(--muted); font-size:12px;">
       The <code style="color:var(--accent2)">shruti_array.fallback</code> module owns the laptop-side
       "am I in fallback mode?" logic and the batch-file ingest path.
       <code style="color:var(--accent2)">python -m shruti_array.fallback ingest --corpus &lt;dir&gt; --out &lt;wav&gt;</code>
       runs the Tier-0 batch beamform (D&amp;S or MVDR).
+      <code style="color:var(--accent2)">shruti-array replay &lt;dir&gt;</code> runs the stem-replay
+      rung through the live pipeline when no phones are available.
     </p>
   </div>
 
@@ -283,7 +286,7 @@
 
 <span class="phone">PHONES</span>  (one master + two elements, foreground services)
   capture (UNPROCESSED, MediaRecorder AudioSource) · chirp beacon (master)
-  heartbeat (keep-alive against Funtouch's background killer) · transport (TCP/WSS)
+  heartbeat (keep-alive against Funtouch's background killer) · transport (OkHttp WebSocket, ws://&lt;laptop&gt;:8765)
 
 <span class="muted">PHONE A ALSO RUNS</span>  (because the Snapdragon NPU is the only one available)
   ASR (QNN-exported IndicWhisper / IndicConformer) · TTS readback (Piper)</pre>

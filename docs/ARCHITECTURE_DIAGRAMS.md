@@ -65,14 +65,20 @@ is what the team pastes into the printed submission pack (per
 ```
    3-phone live beamform   →   2-phone array     →   single-phone enhance
                                                       (NS + AGC-off)
-   Wi-Fi Direct stream     →   chunked file sync →   on-phone-only mode
-                             (batch reprocess)
-   Ultrasonic sync          →   cable-ping        →   pre-timestamped
-                             calibration            exchange
+   WebSocket stream         →   chunked file sync →   stem replay
+   (Wi-Fi Direct)              (batch reprocess)     (laptop-closed recovery)
 
    shruti_array.fallback ingest --corpus <dir> --out <wav>
        └─ Tier-0 batch beamform (D&S or MVDR)
+   shruti-array replay <dir>
+       └─ Stem replay through the live pipeline (no live phones required)
 ```
+
+The "stem replay" rung replaces the old "red-light / phone-only"
+description. We do not ship an on-phone beamformer; the laptop-closed
+recovery plays a pre-recorded multichannel stem through the same
+pipeline that the live transport uses, so the radar + beamformed
+output stay demonstrable even when the Wi-Fi Direct group is down.
 
 ## Key numbers (design targets, calibrated on the iQOO loaner fleet)
 
@@ -98,7 +104,7 @@ PHONES  (one master + two elements, foreground services)
   capture (UNPROCESSED, MediaRecorder AudioSource)
   chirp beacon (master)
   heartbeat (keep-alive against Funtouch's background killer)
-  transport (TCP/WSS)
+  transport (OkHttp WebSocket, ws://<laptop>:8765)
 
 PHONE A ALSO RUNS  (because the Snapdragon NPU is the only one available)
   ASR (QNN-exported IndicWhisper / IndicConformer)

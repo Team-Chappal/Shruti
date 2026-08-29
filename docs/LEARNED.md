@@ -12,9 +12,11 @@ the team should expect on event day.
 | Sync offset < 100 µs, design 42 µs | DSP path implemented; the 42 µs number is *predicted*, not measured. Real number is filled in at the venue during the sync-spike step of the recipe. |
 | Tier-1: 3 phones, Tier-0: 2       | Both supported. DspLoop subsets the geometry to match the actual channel count, so the 2-phone mode doesn't crash the beamformer. |
 | MVDR beats D&S by ≥ 3 dB on the recorded corpus | The synthetic-corpus suite (CI gate) is set to -3.0 dB tolerance. The recorded-corpus gate is a manual run before the event. |
-| Build size: ~75% line coverage   | 77% with the default ignore (asr/sherpa_onnx, tts/piper). |
-| Tests: 70 green                  | 109 green (laptop) + 11 green (Android protocol). |
+| Build size: ~75% line coverage   | ~90% (laptop) with the default ignore (asr/sherpa_onnx, tts/piper). |
+| Tests: 70 green                  | 121 green (laptop) + 11 green (Android protocol). |
 | Office Kit as transport           | The transport layer is real WebSocket over plain TCP. Office Kit is the on-site iQOO wrapper that the team plugs in. |
+| TCP transport (port 9870)         | Replaced with OkHttp WebSocket on port 8765 (Android + laptop). The wire format is byte-identical, only the transport wrapper changed. |
+| "Red-light / phone-only" recovery | Renamed to "stem replay" and re-implemented as `shruti-array replay <dir>`. We do not ship an on-phone beamformer; the laptop-closed recovery plays a pre-recorded multichannel stem through the same pipeline. |
 
 ## What the plan didn't say, that we did anyway
 
