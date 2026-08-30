@@ -18,6 +18,20 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
+    <!-- T20: Android 16 connectedDevice FGS type. Per
+         https://developer.android.com/about/versions/16/behavior-changes-16
+         the `connectedDevice` FGS type is the right home for
+         "interactions with external devices that require Bluetooth, NFC,
+         IR, USB, or network connection". It also pairs with the local
+         network permission grant so the kernel-level BPF filter
+         (which on ColorOS / NothingOS otherwise returns EPERM on
+         ServerSocket.bind and outbound socket.create) lets the
+         app through. Requires at least one of BLUETOOTH_CONNECT,
+         BLUETOOTH_ADVERTISE, BLUETOOTH_SCAN, UWB_RANGING, or
+         UsbManager.requestPermission(). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
     <!-- ASR/TTS model access (sherpa-onnx) on internal storage. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
@@ -41,17 +55,17 @@
         <service
             android:name=".capture.CaptureService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|connectedDevice" />
 
         <service
             android:name=".capture.AuditService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="microphone|connectedDevice" />
 
         <service
             android:name=".sync.ChirpService"
             android:exported="false"
-            android:foregroundServiceType="microphone" />
+            android:foregroundServiceType="connectedDevice" />
 
     </application>
 </manifest>

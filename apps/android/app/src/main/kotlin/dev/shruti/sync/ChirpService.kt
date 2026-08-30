@@ -101,7 +101,15 @@ class ChirpService : Service() {
             .setSmallIcon(android.R.drawable.presence_audio_online)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(2, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            // T20: `connectedDevice` is the right FGS type for the WebSocket
+            // heartbeat over the local network. See dev/shruti/capture/
+            // CaptureService.kt for the rationale.
+            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            startForeground(2, notif, fgsType)
         } else {
             startForeground(2, notif)
         }

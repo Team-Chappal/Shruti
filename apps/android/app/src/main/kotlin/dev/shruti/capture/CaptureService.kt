@@ -102,10 +102,19 @@ class CaptureService : Service() {
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                1, notif,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-            )
+            // T20: declare `connectedDevice` alongside `microphone` so the
+            // kernel-level local-network filter (BPF cgroup socket filter
+            // on ColorOS / NothingOS) lets the outbound and inbound
+            // sockets through. Without this, ServerSocket.bind(0.0.0.0,
+            // 8765) and the OkHttp client both return EPERM even when
+            // NEARBY_WIFI_DEVICES is granted.
+            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+            startForeground(1, notif, fgsType)
         } else {
             startForeground(1, notif)
         }
