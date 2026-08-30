@@ -100,6 +100,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // T20: when launched with the SHRUTI_AUTO_START extra, skip the
+        // Setup screen and start the session right away. This exists for
+        // the venue-day recovery ritual: a stuck Setup screen on a
+        // hand-off device can be recovered by `adb shell am start -n
+        // dev.shruti/.ui.MainActivity --ez dev.shruti.auto_start true`
+        // without needing the on-screen tap to register.
+        if (savedInstanceState == null && intent?.getBooleanExtra(
+                "dev.shruti.auto_start", false) == true) {
+            pendingStartPhoneId = intent.getIntExtra("dev.shruti.phone_id", IdentityConfig.phoneId(this))
+            pendingStartIsMaster = intent.getBooleanExtra("dev.shruti.is_master", IdentityConfig.isMaster(this))
+            // Skip the permission prompts: the operator already granted
+            // them via the Setup screen on a prior launch.
+            startSession()
+        }
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
