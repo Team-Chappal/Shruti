@@ -84,6 +84,11 @@ class SherpaOnnxASR(ASR):
                 "`pip install sherpa-onnx` and download the "
                 "ONNX checkpoint into data/models/sherpa/."
             ) from e
+        for p in (self.config.encoder, self.config.decoder, self.config.joiner, self.config.tokens):
+            if not os.path.exists(p):
+                raise RuntimeError(
+                    f"sherpa-onnx model file not found: {p}. Run `python -m tools.fetch_asr` to download."
+                )
         # Offline recognizer (not streaming): the entire audio
         # chunk is passed in and a transcript is returned.
         self._recognizer = sherpa_onnx.OfflineRecognizer.from_transducer(

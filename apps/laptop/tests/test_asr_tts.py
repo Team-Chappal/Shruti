@@ -88,3 +88,30 @@ def test_make_asr_constructs_sherpa_engine_when_requested() -> None:
     # silently mis-transcribe.
     with pytest.raises(RuntimeError, match="sherpa-onnx"):
         asr.transcribe(np.zeros(160, dtype=np.float32), 16_000)
+
+
+def test_sherpa_onnx_real_model_transcribes() -> None:
+    """When the real model files exist in data/models/sherpa,
+    SherpaOnnxASR initializes successfully and produces transcript segments."""
+    from pathlib import Path
+
+    from shruti_array.asr.sherpa_onnx import SherpaOnnxASR, SherpaOnnxConfig
+
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
+    model_dir = repo_root / "data" / "models" / "sherpa"
+    if not (model_dir / "encoder.onnx").is_file():
+        pytest.skip("sherpa model not downloaded")
+
+    asr = SherpaOnnxASR(SherpaOnnxConfig(
+        encoder=str(model_dir / "encoder.onnx"),
+        decoder=str(model_dir / "decoder.onnx"),
+        joiner=str(model_dir / "joiner.onnx"),
+        tokens=str(model_dir / "tokens.txt"),
+        language="en",
+    ))
+    samples = np.zeros(16_000, dtype=np.int16)
+    segments = asr.transcribe(samples, sample_rate_hz=16_000)
+    assert len(segments) == 1
+    assert segments[0].language == "en"
+    assert asr.call_count == 1
+

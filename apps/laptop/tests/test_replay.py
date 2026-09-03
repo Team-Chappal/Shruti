@@ -60,6 +60,22 @@ def test_load_stem_channels_supports_phone_id_prefix_convention(tmp_path: Path) 
     assert sorted(pid for pid, _ in channels) == [0, 1]
 
 
+def test_load_stem_channels_supports_loop_recorder_prefix_convention(tmp_path: Path) -> None:
+    """The `<run_id>_phone<phone_id>.wav` convention produced by
+    LoopRecorder (--record-toggle) must also be recognized by replay."""
+    sr = 48_000
+    t = np.arange(sr) / sr
+    samples = (0.3 * np.sin(2 * np.pi * 440.0 * t)).astype(np.float32)
+    _write_wav(tmp_path / "toggle-run_phone0.wav", samples, sr)
+    _write_wav(tmp_path / "toggle-run_phone1.wav", samples, sr)
+    _write_wav(tmp_path / "toggle-run_beamformed.wav", samples, sr)
+    loaded_sr, channels = _load_stem_channels(tmp_path)
+    assert loaded_sr == sr
+    assert len(channels) == 2
+    assert sorted(pid for pid, _ in channels) == [0, 1]
+
+
+
 def test_load_stem_channels_rejects_sample_rate_mismatch(tmp_path: Path) -> None:
     """If two phones record at different rates, the beamformer
     can't combine them. Fail fast with a clear error."""
