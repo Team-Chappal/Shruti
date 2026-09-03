@@ -57,15 +57,15 @@ object WavFileWriter {
     fun patchHeaderSize(file: File, totalSamples: Int) {
         val dataBytes = totalSamples * NUM_CHANNELS * BITS_PER_SAMPLE / 8
         RandomAccessFile(file, "rw").use { raf ->
-            // chunk size at offset 4 (4 bytes)
+            // chunk size at offset 4 (4 bytes) LE
             raf.seek(4)
-            raf.writeInt(36 + dataBytes)
-            // sample count at offset 40 (4 bytes) — note this
+            raf.writeInt(Integer.reverseBytes(36 + dataBytes))
+            // sample count at offset 40 (4 bytes) LE — note this
             // is the sample count, not the byte count, so the
             // laptop's `pick_most_recent_per_phone` reads the
             // correct total.
             raf.seek(40)
-            raf.writeInt(totalSamples)
+            raf.writeInt(Integer.reverseBytes(totalSamples))
         }
     }
 }
