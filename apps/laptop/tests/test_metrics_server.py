@@ -122,7 +122,7 @@ def test_dashboard_endpoint_returns_html(tmp_path: Path) -> None:
 
 
 def test_post_method_returns_405(tmp_path: Path) -> None:
-    """Only GET is allowed; other methods get 405, not silent success."""
+    """Only GET is allowed for standard routes; other methods get 405, not silent success."""
     request = (
         b"POST /metrics HTTP/1.1\r\n"
         b"Host: 127.0.0.1\r\n"
@@ -136,6 +136,29 @@ def test_post_method_returns_405(tmp_path: Path) -> None:
     status, _, body = _parse_response(bytes(writer.buf))
     assert status == 405
     assert "not allowed" in body
+
+
+def test_api_toggle_flips_beamform_mode(tmp_path: Path) -> None:
+    """POST or GET /api/toggle triggers the callback and returns status."""
+    toggled = []
+
+    def _cb() -> bool:
+        toggled.append(True)
+        return False
+
+    srv = MetricsHTTPServer(
+        host="127.0.0.1", port=0, boot_file=tmp_path / "boot", on_toggle=_cb
+    )
+    request = b"POST /api/toggle HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+    reader = _FakeReader([request, b"\r\n"])
+    writer = _FakeWriter()
+    asyncio.run(srv._handle(reader, writer))  # noqa: SLF001
+    status, headers, body = _parse_response(bytes(writer.buf))
+    assert status == 200
+    assert "application/json" in headers["content-type"]
+    assert "beamform_active" in body
+    assert len(toggled) == 1
+
 
 
 def test_first_boot_stamp_survives_restart(tmp_path: Path) -> None:

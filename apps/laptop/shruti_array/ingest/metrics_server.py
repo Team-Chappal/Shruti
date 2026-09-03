@@ -10,6 +10,7 @@ the simplicity wins.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from collections.abc import Callable
@@ -67,10 +68,13 @@ class MetricsHTTPServer:
         port: int = 8766,
         packet_server: PacketServer | None = None,
         boot_file: Path | None = None,
+        on_toggle: Callable[[], bool] | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.packet_server = packet_server
+        self.on_toggle = on_toggle
+        self._beamform_active = True
         # T12: stamp the boot time on first start. If the
         # stamp file already exists, leave it alone — that's
         # the laptop's first-ever boot, which is what the
@@ -102,6 +106,19 @@ class MetricsHTTPServer:
             line = await reader.readline()
             if line in (b"\r\n", b"", b"\n"):
                 break
+
+        if path.startswith("/api/toggle"):
+            if self.on_toggle is not None:
+                self._beamform_active = self.on_toggle()
+            else:
+                self._beamform_active = not self._beamform_active
+            METRICS.set_gauge("shruti_beamform_active", 1.0 if self._beamform_active else 0.0)
+            payload = json.dumps({"beamform_active": self._beamform_active}) + "\n"
+            writer.write(_render(payload, content_type="application/json; charset=utf-8"))
+            await writer.drain()
+            writer.close()
+            return
+
         if method != "GET":
             writer.write(_render("method not allowed\n", status=405))
             await writer.drain()
@@ -142,6 +159,10 @@ class MetricsHTTPServer:
         METRICS.set_gauge(
             "shruti_pitch_mode",
             1.0 if boot.pitch_mode() == boot.PITCH_MODE_TIER_1 else 0.0,
+        )
+        METRICS.set_gauge(
+            "shruti_beamform_active",
+            1.0 if self._beamform_active else 0.0,
         )
         METRICS.set_gauge("shruti_metrics_server_uptime_s", time.time() - os.stat(self._boot_file).st_mtime + up)
         if self.packet_server is not None:

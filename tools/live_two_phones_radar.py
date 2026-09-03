@@ -1,8 +1,8 @@
-"""Live 2-Phone Phased Array, Radar & Offline ASR via USB / Wi-Fi.
+"""Live 2-Phone Phased Array, Radar, Web UI & Offline ASR via USB / Wi-Fi.
 
 Connects to Phone 0 and Phone 1, drains packets through StreamAligner + DspLoop,
 runs real-time Delay-and-Sum or MVDR beamforming, offline SherpaOnnx speech recognition,
-and renders live TDOA/azimuth tracking and live transcript in the terminal.
+and serves a live Web Dashboard with an interactive RAW <-> BEAMFORMED toggle at http://localhost:8766/.
 """
 from __future__ import annotations
 
@@ -20,11 +20,18 @@ import numpy as np
 
 from shruti_array.config import AppConfig, ServerConfig
 from shruti_array.dsp_loop import DspLoop
+from shruti_array.ingest.metrics_server import MetricsHTTPServer
 from shruti_array.ingest.websocket_server import PacketServer
 from shruti_array.recorder import LoopRecorder
 from shruti_array.render.console_radar import make_state_from_observation, render_to_terminal
 from shruti_array.render.overlays import TranscriptLine
 from shruti_array.sync.alignment import StreamAligner
+
+try:
+    import msvcrt
+    HAS_MSVCRT = True
+except ImportError:
+    HAS_MSVCRT = False
 
 
 def get_asr_engine(model_dir: Path, enable_real: bool = True):
@@ -57,11 +64,30 @@ async def live_loop(
     server = PacketServer(ServerConfig(host="0.0.0.0", port=8765))
     server_task = asyncio.create_task(server.start())
 
+    beamform_active = True
+
+    def toggle_mode() -> bool:
+        nonlocal beamform_active
+        beamform_active = not beamform_active
+        mode_str = "BEAMFORMED (ARRAY ACTIVE)" if beamform_active else "RAW (SINGLE MIC)"
+        print(f"\n>>> [TOGGLE FLIPPED] Current Mode: {mode_str} <<<\n", flush=True)
+        return beamform_active
+
+    metrics_server = MetricsHTTPServer(
+        host="0.0.0.0",
+        port=8766,
+        packet_server=server,
+        on_toggle=toggle_mode,
+    )
+    metrics_task = asyncio.create_task(metrics_server.start())
+
     await asyncio.sleep(0.2)
     print("==========================================================", flush=True)
     print("  SHRUTI 2-PHONE REAL-TIME ARRAY PROCESSOR (LIVE DEMO)", flush=True)
     print("==========================================================", flush=True)
-    print("Listening on ws://0.0.0.0:8765...", flush=True)
+    print("WebSocket Ingest: ws://0.0.0.0:8765/", flush=True)
+    print("Web UI Dashboard: http://localhost:8766/  <-- OPEN IN BROWSER", flush=True)
+    print("Interactive Hotkey: Press [SPACE] or [T] to toggle RAW <-> BEAMFORMED", flush=True)
     print(f"Beamformer: {beamformer.upper()} | Sync: Ultrasonic 17.5-22kHz PRBS", flush=True)
 
     model_dir = repo_root / "data" / "models" / "sherpa"
@@ -89,6 +115,15 @@ async def live_loop(
 
     try:
         while duration_s < 0 or (time.time() - started < duration_s):
+            # Check for console hotkey press (Windows)
+            if HAS_MSVCRT and msvcrt.kbhit():
+                try:
+                    ch = msvcrt.getch()
+                    if ch in (b" ", b"t", b"T"):
+                        toggle_mode()
+                except Exception:
+                    pass
+
             # Drain packet queues from all connected phones
             queues = {pid: conn.queue for pid, conn in server._connections.items()}
             loop.pop_from_queues(queues, max_packets_per_phone=8)
@@ -105,7 +140,9 @@ async def live_loop(
                 )
                 if recorder is not None:
                     recorder.record(frame)
-                accumulated_audio.append(frame.beamformed)
+                # If beamform active, accumulate array output; else raw Phone 0
+                audio_sample = frame.beamformed if beamform_active else frame.channels[0]
+                accumulated_audio.append(audio_sample)
             else:
                 pos = loop.last_position
                 az_deg = None
@@ -150,7 +187,7 @@ async def live_loop(
                     position_xy=pos,
                     sync_stability_us=42.0,
                     started_at_s=started,
-                    beamform_active=True,
+                    beamform_active=beamform_active,
                     transcript_lines=lines,
                 )
                 render_to_terminal(state, force_ascii=force_ascii)
@@ -163,10 +200,11 @@ async def live_loop(
             paths = recorder.finalise()
             print(f"\n[RECORDER] Wrote toggle WAV stems:\n  " + "\n  ".join(str(p) for p in paths), flush=True)
 
+        metrics_task.cancel()
         server_task.cancel()
         try:
-            await server_task
-        except (asyncio.CancelledError, Exception):
+            await asyncio.gather(server_task, metrics_task, return_exceptions=True)
+        except Exception:
             pass
 
     print("\n==========================================================", flush=True)
