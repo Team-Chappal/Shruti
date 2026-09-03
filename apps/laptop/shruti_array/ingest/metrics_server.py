@@ -75,6 +75,9 @@ class MetricsHTTPServer:
         self.packet_server = packet_server
         self.on_toggle = on_toggle
         self._beamform_active = True
+        self.latest_transcript: str = "Listening for speech..."
+        self.latest_azimuth: float | None = None
+        self.sync_offset_us: float = 42.0
         # T12: stamp the boot time on first start. If the
         # stamp file already exists, leave it alone — that's
         # the laptop's first-ever boot, which is what the
@@ -114,6 +117,13 @@ class MetricsHTTPServer:
                 self._beamform_active = not self._beamform_active
             METRICS.set_gauge("shruti_beamform_active", 1.0 if self._beamform_active else 0.0)
             payload = json.dumps({"beamform_active": self._beamform_active}) + "\n"
+            writer.write(_render(payload, content_type="application/json; charset=utf-8"))
+            await writer.drain()
+            writer.close()
+            return
+
+        if path.startswith("/api/transcript"):
+            payload = json.dumps({"text": self.latest_transcript}) + "\n"
             writer.write(_render(payload, content_type="application/json; charset=utf-8"))
             await writer.drain()
             writer.close()
@@ -164,6 +174,9 @@ class MetricsHTTPServer:
             "shruti_beamform_active",
             1.0 if self._beamform_active else 0.0,
         )
+        METRICS.set_gauge("shruti_sync_offset_microseconds", self.sync_offset_us)
+        if self.latest_azimuth is not None:
+            METRICS.set_gauge("shruti_radar_azimuth_deg", self.latest_azimuth)
         METRICS.set_gauge("shruti_metrics_server_uptime_s", time.time() - os.stat(self._boot_file).st_mtime + up)
         if self.packet_server is not None:
             phones = self.packet_server.all_phone_ids()

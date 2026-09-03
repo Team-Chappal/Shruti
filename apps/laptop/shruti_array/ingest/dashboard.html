@@ -249,9 +249,18 @@
         dot.appendChild(document.createTextNode('Phone ' + i));
         healthEl.appendChild(dot);
       }
-      if (tr != null && tr > 0) {
-        transcriptEl.innerHTML = '[transcript length: ' + Math.round(tr) + ' chars]';
-        transcriptEl.classList.remove('placeholder');
+      try {
+        const tResp = await fetch('/api/transcript', { cache: 'no-store' });
+        const tData = await tResp.json();
+        if (tData && tData.text) {
+          transcriptEl.textContent = tData.text;
+          transcriptEl.classList.remove('placeholder');
+        }
+      } catch (_) {
+        if (tr != null && tr > 0) {
+          transcriptEl.innerHTML = '[transcript length: ' + Math.round(tr) + ' chars]';
+          transcriptEl.classList.remove('placeholder');
+        }
       }
       lastEl.textContent = new Date().toLocaleTimeString();
     } catch (e) {

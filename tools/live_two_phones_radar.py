@@ -54,6 +54,24 @@ def get_asr_engine(model_dir: Path, enable_real: bool = True):
     return MockASR()
 
 
+def _launch_phones() -> None:
+    adb_path = "C:/Users/DELL/AppData/Local/Microsoft/WinGet/Packages/Google.PlatformTools_Microsoft.Winget.Source_8wekyb3d8bbwe/platform-tools/adb.exe"
+    import subprocess
+    try:
+        subprocess.run([
+            adb_path, "-s", "001593529000048", "shell", "am", "start", "-n",
+            "dev.shruti/.ui.MainActivity", "--ez", "dev.shruti.auto_start", "true",
+            "--ei", "dev.shruti.phone_id", "0", "--ez", "dev.shruti.is_master", "true"
+        ], capture_output=True, timeout=5)
+        subprocess.run([
+            adb_path, "-s", "Y5GI8XVGPVRO99W8", "shell", "am", "start", "-n",
+            "dev.shruti/.ui.MainActivity", "--ez", "dev.shruti.auto_start", "true",
+            "--ei", "dev.shruti.phone_id", "1", "--ez", "dev.shruti.is_master", "false"
+        ], capture_output=True, timeout=5)
+    except Exception as e:
+        print(f"[LAUNCH] Warning: {e}", flush=True)
+
+
 async def live_loop(
     duration_s: float = 15.0,
     beamformer: str = "das",
@@ -81,7 +99,8 @@ async def live_loop(
     )
     metrics_task = asyncio.create_task(metrics_server.start())
 
-    await asyncio.sleep(0.2)
+    await asyncio.sleep(0.5)
+    _launch_phones()
     print("==========================================================", flush=True)
     print("  SHRUTI 2-PHONE REAL-TIME ARRAY PROCESSOR (LIVE DEMO)", flush=True)
     print("==========================================================", flush=True)
@@ -143,6 +162,8 @@ async def live_loop(
                 # If beamform active, accumulate array output; else raw Phone 0
                 audio_sample = frame.beamformed if beamform_active else frame.channels[0]
                 accumulated_audio.append(audio_sample)
+                if az_deg is not None:
+                    metrics_server.latest_azimuth = az_deg
             else:
                 pos = loop.last_position
                 az_deg = None
@@ -158,6 +179,7 @@ async def live_loop(
                     segments = asr.transcribe(audio_chunk, sample_rate_hz=48_000)
                     if segments and segments[0].text:
                         latest_transcript_text = segments[0].text
+                        metrics_server.latest_transcript = latest_transcript_text
                 except Exception:
                     pass
                 last_asr_time = now

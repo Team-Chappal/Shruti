@@ -130,17 +130,28 @@ class MainActivity : ComponentActivity() {
                         },
                         onShareAuditClicked = {
                             val path = latestAuditPath ?: return@ShrutiScreen
-                            val intent = Intent(Intent.ACTION_SEND).apply {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                 type = "audio/wav"
                                 putExtra(Intent.EXTRA_STREAM, Uri.parse("file://$path"))
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
-                            startActivity(Intent.createChooser(intent, "Share audit WAV"))
+                            startActivity(Intent.createChooser(shareIntent, "Share audit WAV"))
                         },
                         latestAuditPath = latestAuditPath,
                     )
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("dev.shruti.auto_start", false)) {
+            pendingStartPhoneId = intent.getIntExtra("dev.shruti.phone_id", IdentityConfig.phoneId(this))
+            pendingStartIsMaster = intent.getBooleanExtra("dev.shruti.is_master", IdentityConfig.isMaster(this))
+            stopSession()
+            startSession()
         }
     }
 
