@@ -58,11 +58,11 @@ class ModelTarget:
 # is a fallback per the issue's T06 decision tree.
 TARGETS: dict[str, ModelTarget] = {
     "tiny": ModelTarget(
-        name="sherpa-onnx tiny English (csukuangfj/sherpa-onnx-stream-zipformer-en-2023-06-26)",
-        encoder="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26/encoder-epoch-99-avg-1.onnx",
-        decoder="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26/decoder-epoch-99-avg-1.onnx",
-        joiner="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26/joiner-epoch-99-avg-1.onnx",
-        tokens="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-2023-06-26/tokens.txt",
+        name="sherpa-onnx tiny English (csukuangfj/sherpa-onnx-zipformer-small-en-2023-06-26)",
+        encoder="https://huggingface.co/csukuangfj/sherpa-onnx-zipformer-small-en-2023-06-26/resolve/main/encoder-epoch-99-avg-1.int8.onnx",
+        decoder="https://huggingface.co/csukuangfj/sherpa-onnx-zipformer-small-en-2023-06-26/resolve/main/decoder-epoch-99-avg-1.int8.onnx",
+        joiner="https://huggingface.co/csukuangfj/sherpa-onnx-zipformer-small-en-2023-06-26/resolve/main/joiner-epoch-99-avg-1.int8.onnx",
+        tokens="https://huggingface.co/csukuangfj/sherpa-onnx-zipformer-small-en-2023-06-26/resolve/main/tokens.txt",
         sample_rate_hz=16_000,
         language="en",
     ),

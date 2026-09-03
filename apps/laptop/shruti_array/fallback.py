@@ -81,40 +81,62 @@ def read_wav(path: Path) -> tuple[int, NDArray[np.float32]]:
     return sr, data
 
 
+def extract_phone_id_from_stem(stem: str) -> int | None:
+    """Extract phone_id from common naming conventions:
+      - '<phone_id>_<...>' (e.g. '0_chamber')
+      - 'ch<phone_id>'    (e.g. 'ch0', synth-corpus)
+      - '<prefix_>phone<phone_id>' (e.g. 'toggle-..._phone0', LoopRecorder)
+      - 'phone<phone_id>' (e.g. 'phone0')
+    """
+    if stem.endswith("_beamformed") or stem == "beamformed":
+        return None
+    if "_" in stem:
+        try:
+            return int(stem.split("_", 1)[0])
+        except ValueError:
+            pass
+    if stem.startswith("ch"):
+        try:
+            return int(stem[2:])
+        except ValueError:
+            pass
+    if "_phone" in stem:
+        try:
+            return int(stem.rsplit("_phone", 1)[1])
+        except ValueError:
+            pass
+    if stem.startswith("phone"):
+        try:
+            return int(stem[5:])
+        except ValueError:
+            pass
+    return None
+
+
 def list_batch_files(directory: Path, phone_id: int | None = None) -> list[Path]:
     """List WAV files eligible for batch ingest, newest first.
 
-    Convention: phone_id is encoded in the filename as `<phone_id>_<...>.wav`.
+    Convention: phone_id is encoded in the filename via standard conventions.
     """
     if not directory.exists():
         return []
     files = sorted(directory.glob("*.wav"), key=lambda p: p.stat().st_mtime, reverse=True)
     if phone_id is not None:
-        files = [p for p in files if p.stem.split("_", 1)[0] == str(phone_id)]
+        files = [p for p in files if extract_phone_id_from_stem(p.stem) == phone_id]
     return files
 
 
 def pick_most_recent_per_phone(directory: Path) -> dict[int, Path]:
     """Pick the single most recent WAV per phone_id from the batch dir.
 
-    Supports two filename conventions:
+    Supports three filename conventions:
       - '<phone_id>_<...>.wav'  (e.g. '0_chamber.wav')
       - 'ch<phone_id>.wav'     (e.g. 'ch0.wav', the synth-corpus convention)
+      - '<run_id>_phone<phone_id>.wav' (e.g. 'toggle-..._phone0.wav', LoopRecorder)
     """
     result: dict[int, Path] = {}
     for path in list_batch_files(directory):
-        stem = path.stem
-        phone_id: int | None = None
-        if "_" in stem:
-            try:
-                phone_id = int(stem.split("_", 1)[0])
-            except ValueError:
-                phone_id = None
-        if phone_id is None and stem.startswith("ch"):
-            try:
-                phone_id = int(stem[2:])
-            except ValueError:
-                phone_id = None
+        phone_id = extract_phone_id_from_stem(path.stem)
         if phone_id is None:
             continue
         if phone_id not in result:

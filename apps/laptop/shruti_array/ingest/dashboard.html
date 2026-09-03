@@ -59,6 +59,8 @@
     <div>Uptime: <span id="uptime" class="uptime">--</span></div>
     <div>Pitch mode: <span id="pitchMode" class="badge tier_1">tier_1</span></div>
     <div>Active phones: <span id="activePhones" class="badge tier_1">0</span></div>
+    <div>Array mode: <span id="modeBadge" class="badge" style="background: #238636; color: #fff;">BEAMFORMED</span></div>
+    <div><button id="toggleBtn" onclick="flipToggle()" style="cursor: pointer; font-weight: 700; border: 1px solid #3fb950; background: #238636; color: #fff; padding: 6px 16px; border-radius: 6px; font-size: 15px; transition: all 0.2s ease;">TOGGLE: BEAMFORMED</button></div>
     <div>Last update: <span id="lastUpdate">--</span></div>
   </div>
   <div class="grid">
@@ -93,6 +95,39 @@
   const transcriptEl = document.getElementById('transcript');
   const radarCanvas = document.getElementById('radar');
   const radarCtx = radarCanvas.getContext('2d');
+  const modeBadgeEl = document.getElementById('modeBadge');
+  const toggleBtnEl = document.getElementById('toggleBtn');
+  let currentBeamformActive = true;
+
+  async function flipToggle() {
+    try {
+      toggleBtnEl.disabled = true;
+      const resp = await fetch('/api/toggle', { method: 'POST' });
+      const data = await resp.json();
+      updateToggleUI(data.beamform_active);
+    } catch (e) {
+      console.error('Toggle failed', e);
+    } finally {
+      toggleBtnEl.disabled = false;
+    }
+  }
+
+  function updateToggleUI(isActive) {
+    currentBeamformActive = isActive;
+    if (isActive) {
+      modeBadgeEl.textContent = 'BEAMFORMED';
+      modeBadgeEl.style.background = '#238636';
+      toggleBtnEl.textContent = 'TOGGLE: BEAMFORMED (ON)';
+      toggleBtnEl.style.background = '#238636';
+      toggleBtnEl.style.borderColor = '#3fb950';
+    } else {
+      modeBadgeEl.textContent = 'RAW AUDIO';
+      modeBadgeEl.style.background = '#9e6a03';
+      toggleBtnEl.textContent = 'TOGGLE: RAW (OFF)';
+      toggleBtnEl.style.background = '#9e6a03';
+      toggleBtnEl.style.borderColor = '#d29922';
+    }
+  }
 
   function formatUptime(s) {
     if (s == null) return '--';
@@ -178,7 +213,11 @@
       const ap = pickGauge(metrics, 'shruti_active_phones');
       const az = pickGauge(metrics, 'shruti_radar_azimuth_deg');
       const tr = pickGauge(metrics, 'shruti_asr_transcript_length_chars');
+      const bf = pickGauge(metrics, 'shruti_beamform_active');
       const health = pickLabeled(metrics, 'shruti_element_healthy');
+      if (bf != null) {
+        updateToggleUI(bf >= 1.0);
+      }
       if (off != null) {
         offsetEl.innerHTML = `${off.toFixed(1)}<span class="unit">&micro;s</span>`;
       }
@@ -210,9 +249,18 @@
         dot.appendChild(document.createTextNode('Phone ' + i));
         healthEl.appendChild(dot);
       }
-      if (tr != null && tr > 0) {
-        transcriptEl.innerHTML = '[transcript length: ' + Math.round(tr) + ' chars]';
-        transcriptEl.classList.remove('placeholder');
+      try {
+        const tResp = await fetch('/api/transcript', { cache: 'no-store' });
+        const tData = await tResp.json();
+        if (tData && tData.text) {
+          transcriptEl.textContent = tData.text;
+          transcriptEl.classList.remove('placeholder');
+        }
+      } catch (_) {
+        if (tr != null && tr > 0) {
+          transcriptEl.innerHTML = '[transcript length: ' + Math.round(tr) + ' chars]';
+          transcriptEl.classList.remove('placeholder');
+        }
       }
       lastEl.textContent = new Date().toLocaleTimeString();
     } catch (e) {
