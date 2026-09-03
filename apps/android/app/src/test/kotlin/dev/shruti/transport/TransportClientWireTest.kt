@@ -69,18 +69,19 @@ class TransportClientWireTest {
             ctx,
             phoneId = 0,
             isMaster = false,
-            laptopWsUrl = server.url("/").toString(),
+            laptopWsUrl = server.url("/").toString().replace("http://", "ws://"),
         )
     }
 
     @After
     fun tearDown() {
-        server.shutdown()
+        try {
+            server.shutdown()
+        } catch (_: Throwable) {}
     }
 
     @Test
     fun transport_sends_byte_exact_wire_format() {
-        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val samples = ByteArray(960 * 2) { (it % 200).toByte() }
         val expected = framePacket(
             phoneId = 0,
@@ -100,8 +101,6 @@ class TransportClientWireTest {
         val ws = client.newWebSocket(req, NoopListener())
         val sent = ws.send(okio.ByteString.of(*expected))
         assertTrue("ws.send returned false", sent)
-        // Trigger close so MockWebServer finalises the request.
-        ws.close(1000, "test done")
 
         // The server received a single WS frame whose bytes
         // are exactly the wire-format packet.
@@ -127,6 +126,20 @@ class TransportClientWireTest {
         assertEquals(48_000, header.sampleRateHz)
         assertEquals(960, header.sampleCount)
         assertEquals(Protocol.TYPE_AUDIO_FRAME, header.packetType)
+        ws.close(1000, "done")
+        client.dispatcher.executorService.shutdown()
+        client.connectionPool.evictAll()
+    }
+
+    @Test
+    fun manifest_declares_internet_permission() {
+        val pm = ApplicationProvider.getApplicationContext<android.content.Context>().packageManager
+        val pkgInfo = pm.getPackageInfo("dev.shruti", android.content.pm.PackageManager.GET_PERMISSIONS)
+        val perms = pkgInfo.requestedPermissions?.toSet() ?: emptySet()
+        assertTrue(
+            "INTERNET permission must be declared in AndroidManifest.xml so Android kernel grants AID_INET GID 3003",
+            perms.contains("android.permission.INTERNET"),
+        )
     }
 
     private class NoopListener : WebSocketListener() {

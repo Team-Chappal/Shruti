@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Network permissions: required by Android kernel to open sockets (grants AID_INET GID 3003) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <!-- Audio capture: foreground service needs the mic, plus a foreground
          service type declared for Android 14+ when targeting SDK 34. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
